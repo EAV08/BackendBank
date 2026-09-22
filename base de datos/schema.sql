@@ -16,3 +16,13 @@ CREATE TABLE clientes (
     fecha_actualizacion TIMESTAMPTZ,
     motivo              VARCHAR(200)
 );
+
+UPDATE clientes
+SET rol = 'ADMINISTRADOR',
+    estado = 'activo'
+WHERE usuario = 'admin';
+
+
+Select * from clientes;
+
+Drop table clientes;
