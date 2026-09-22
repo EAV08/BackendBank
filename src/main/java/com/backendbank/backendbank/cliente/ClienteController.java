@@ -81,6 +81,14 @@ record RegistroClienteRequest(
         @Size(max = 150, message = "El email debe corregirse")
         String email,
 
+        @NotBlank(message = "El usuario debe completarse")
+        @Size(max = 80, message = "El usuario debe corregirse")
+        String usuario,
+
+        @NotBlank(message = "La contraseña debe completarse")
+        @Size(max = 255, message = "La contraseña debe corregirse")
+        String contrasena,
+
         @Size(max = 20, message = "El teléfono debe corregirse")
         String telefono
 ) {
@@ -89,6 +97,8 @@ record RegistroClienteRequest(
         razonSocial = recortar(razonSocial);
         nitDocumento = recortar(nitDocumento);
         email = recortar(email);
+        usuario = recortar(usuario);
+        contrasena = recortar(contrasena);
         telefono = recortar(telefono);
     }
 
@@ -101,15 +111,21 @@ record RegistroClienteResponse(UUID idCliente, String estado, String mensaje) {
 }
 
 record IngresoRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente,
+        @NotBlank(message = "El usuario debe completarse")
+        @Size(max = 80, message = "El usuario debe corregirse")
+        String usuario,
 
-        @NotBlank(message = "El documento debe completarse")
-        @Size(max = 30, message = "El documento debe corregirse")
-        String nitDocumento
+        @NotBlank(message = "La contraseña debe completarse")
+        @Size(max = 255, message = "La contraseña debe corregirse")
+        String contrasena
 ) {
     IngresoRequest {
-        nitDocumento = nitDocumento == null ? null : nitDocumento.trim();
+        usuario = recortar(usuario);
+        contrasena = recortar(contrasena);
+    }
+
+    private static String recortar(String valor) {
+        return valor == null ? null : valor.trim();
     }
 }
 
@@ -201,6 +217,8 @@ class ApiExceptionHandler {
             "razonSocial", "razón social",
             "nitDocumento", "documento",
             "email", "email",
+            "usuario", "usuario",
+            "contrasena", "contraseña",
             "telefono", "teléfono",
             "estado", "estado",
             "motivo", "motivo",

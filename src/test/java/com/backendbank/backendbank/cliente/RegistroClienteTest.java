@@ -50,6 +50,8 @@ class RegistroClienteTest {
         assertEquals("Tienda El Sol", guardado.getNombreComercial());
         assertEquals("900123456", guardado.getNitDocumento());
         assertEquals("contacto@elsol.com", guardado.getEmail());
+        assertEquals("contacto", guardado.getUsuario());
+        assertEquals("clave123", guardado.getContrasena());
         assertEquals("3001234567", guardado.getTelefono());
         assertEquals(Cliente.ROL_CLIENTE, guardado.getRol());
         assertNotNull(guardado.getFechaRegistro());
@@ -104,6 +106,22 @@ class RegistroClienteTest {
                         .content(clienteJson("Otra Tienda", "Otra S.A.S.", "900123456", "otro@elsol.com", "3010000000")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaCuandoElUsuarioYaExiste() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", "3010000000", "contacto", "otraClave")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese usuario"));
 
         assertEquals(1, clienteRepository.count());
     }
@@ -485,40 +503,40 @@ class RegistroClienteTest {
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(clienteId, "  900123456  ")))
+                        .content(ingresoJson("  contacto  ", "  clave123  ")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
                 .andExpect(jsonPath("$.estado").value("activo"))
                 .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"));
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
-        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("contacto", despues.getUsuario());
         assertEquals("activo", despues.getEstado());
     }
 
     @Test
-    void rechazaIngresoCuandoElNitNoCoincide() throws Exception {
+    void rechazaIngresoCuandoLaContrasenaNoCoincide() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(clienteId, "000000000")))
+                        .content(ingresoJson("contacto", "clave-incorrecta")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.mensaje").value("el usuario o la contraseña son inválidos"));
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
-        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("contacto", despues.getUsuario());
         assertEquals("activo", despues.getEstado());
     }
 
     @Test
-    void rechazaIngresoCuandoElIdNoExiste() throws Exception {
+    void rechazaIngresoCuandoElUsuarioNoExiste() throws Exception {
         long antes = clienteRepository.count();
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(UUID.randomUUID(), "900123456")))
+                        .content(ingresoJson("no-existe", "clave123")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.mensaje").value("el usuario o la contraseña son inválidos"));
 
@@ -526,75 +544,74 @@ class RegistroClienteTest {
     }
 
     @Test
-    void rechazaIngresoCuandoElNitCoincidePeroEstaInactivo() throws Exception {
+    void rechazaIngresoCuandoElUsuarioCoincidePeroEstaInactivo() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_INACTIVO);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(clienteId, "900123456")))
+                        .content(ingresoJson("contacto", "clave123")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.mensaje").value("su usuario está inactivo y debe contactar al banco"));
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("inactivo", despues.getEstado());
-        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("contacto", despues.getUsuario());
     }
 
     @Test
-    void rechazaIngresoCuandoElNitCoincidePeroEstaBloqueado() throws Exception {
+    void rechazaIngresoCuandoElUsuarioCoincidePeroEstaBloqueado() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_BLOQUEADO);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(clienteId, "900123456")))
+                        .content(ingresoJson("contacto", "clave123")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"));
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("bloqueado", despues.getEstado());
-        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("contacto", despues.getUsuario());
     }
 
     @Test
-    void rechazaIngresoCuandoElNitCoincidePeroEstaPendiente() throws Exception {
+    void rechazaIngresoCuandoElUsuarioCoincidePeroEstaPendiente() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(ingresoJson(clienteId, "900123456")))
+                        .content(ingresoJson("contacto", "clave123")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.mensaje").value("su usuario aún no está activo y debe contactar al banco"));
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("pendiente_de_validacion", despues.getEstado());
-        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("contacto", despues.getUsuario());
     }
 
     @Test
-    void rechazaIngresoCuandoFaltanDatosOElIdEsInvalido() throws Exception {
+    void rechazaIngresoCuandoFaltanDatos() throws Exception {
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "nitDocumento": "900123456"
+                                  "contrasena": "clave123"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: id cliente"));
+                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: usuario"));
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "idCliente": "no-es-uuid",
-                                  "nitDocumento": "900123456"
+                                  "usuario": "contacto"
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.mensaje").value("Debe corregir los siguientes datos: id cliente"));
+                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: contraseña"));
     }
 
     private UUID registrar(String nombre, String razon, String nit, String email, String telefono) throws Exception {
@@ -621,13 +638,13 @@ class RegistroClienteTest {
         clienteRepository.saveAndFlush(cliente);
     }
 
-    private String ingresoJson(UUID idCliente, String nitDocumento) {
+    private String ingresoJson(String usuario, String contrasena) {
         return """
                 {
-                  "idCliente": "%s",
-                  "nitDocumento": "%s"
+                  "usuario": "%s",
+                  "contrasena": "%s"
                 }
-                """.formatted(idCliente, nitDocumento);
+                """.formatted(usuario, contrasena);
     }
 
     private String estadoJson(String estado, String motivo, UUID actualizadoPor) {
@@ -663,14 +680,32 @@ class RegistroClienteTest {
     }
 
     private String clienteJson(String nombreComercial, String razonSocial, String nitDocumento, String email, String telefono) {
+        return clienteJson(nombreComercial, razonSocial, nitDocumento, email, telefono, usuarioDesde(email), "clave123");
+    }
+
+    private String clienteJson(
+            String nombreComercial,
+            String razonSocial,
+            String nitDocumento,
+            String email,
+            String telefono,
+            String usuario,
+            String contrasena) {
         String telefonoJson = telefono == null ? "" : ",\n  \"telefono\": \"" + telefono + "\"";
         return """
                 {
                   "nombreComercial": "%s",
                   "razonSocial": "%s",
                   "nitDocumento": "%s",
-                  "email": "%s"%s
+                  "email": "%s",
+                  "usuario": "%s",
+                  "contrasena": "%s"%s
                 }
-                """.formatted(nombreComercial, razonSocial, nitDocumento, email, telefonoJson);
+                """.formatted(nombreComercial, razonSocial, nitDocumento, email, usuario, contrasena, telefonoJson);
+    }
+
+    private String usuarioDesde(String email) {
+        int separador = email.indexOf('@');
+        return separador < 0 ? email : email.substring(0, separador);
     }
 }

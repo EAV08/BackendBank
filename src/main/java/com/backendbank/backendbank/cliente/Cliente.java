@@ -36,6 +36,12 @@ public class Cliente {
     @Column(name = "email", nullable = false, unique = true, length = 150)
     private String email;
 
+    @Column(name = "usuario", nullable = false, unique = true, length = 80)
+    private String usuario;
+
+    @Column(name = "contrasena", nullable = false, length = 255)
+    private String contrasena;
+
     @Column(name = "telefono", length = 20)
     private String telefono;
 
@@ -107,6 +113,22 @@ public class Cliente {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(String usuario) {
+        this.usuario = usuario;
+    }
+
+    public String getContrasena() {
+        return contrasena;
+    }
+
+    public void setContrasena(String contrasena) {
+        this.contrasena = contrasena;
     }
 
     public String getTelefono() {

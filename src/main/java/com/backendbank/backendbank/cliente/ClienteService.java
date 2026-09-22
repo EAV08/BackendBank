@@ -14,6 +14,7 @@ public class ClienteService {
     static final String MENSAJE_ACTUALIZACION_EXITOSA = "actualización exitosa";
     static final String MENSAJE_DOCUMENTO_DUPLICADO = "ya existe un cliente registrado con ese documento";
     static final String MENSAJE_EMAIL_DUPLICADO = "ya existe un cliente registrado con ese email";
+    static final String MENSAJE_USUARIO_DUPLICADO = "ya existe un cliente registrado con ese usuario";
     static final String MENSAJE_NO_ENCONTRADO = "el cliente no fue encontrado";
     static final String MENSAJE_NO_AUTORIZADO = "no cuento con autorización para realizar esta acción";
     static final String MENSAJE_SESION = "debe ingresar de nuevo";
@@ -38,6 +39,8 @@ public class ClienteService {
         String razonSocial = request.razonSocial().trim();
         String nitDocumento = request.nitDocumento().trim();
         String email = request.email().trim();
+        String usuario = request.usuario().trim();
+        String contrasena = request.contrasena().trim();
         String telefono = normalizarTelefono(request.telefono());
 
         if (clienteRepository.existsByNitDocumento(nitDocumento)) {
@@ -46,12 +49,17 @@ public class ClienteService {
         if (clienteRepository.existsByEmail(email)) {
             throw new ClienteDuplicadoException(MENSAJE_EMAIL_DUPLICADO);
         }
+        if (clienteRepository.existsByUsuario(usuario)) {
+            throw new ClienteDuplicadoException(MENSAJE_USUARIO_DUPLICADO);
+        }
 
         Cliente cliente = new Cliente();
         cliente.setNombreComercial(nombreComercial);
         cliente.setRazonSocial(razonSocial);
         cliente.setNitDocumento(nitDocumento);
         cliente.setEmail(email);
+        cliente.setUsuario(usuario);
+        cliente.setContrasena(contrasena);
         cliente.setTelefono(telefono);
         cliente.setEstado(Cliente.ESTADO_ACTIVO);
         cliente.setRol(Cliente.ROL_CLIENTE);
@@ -136,11 +144,8 @@ public class ClienteService {
 
     @Transactional(readOnly = true)
     public IngresoResponse ingresar(IngresoRequest request) {
-        Cliente cliente = clienteRepository.findById(request.idCliente()).orElse(null);
-        if (cliente == null) {
-            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
-        }
-        if (!request.nitDocumento().trim().equals(cliente.getNitDocumento())) {
+        Cliente cliente = clienteRepository.findByUsuario(request.usuario()).orElse(null);
+        if (cliente == null || !request.contrasena().equals(cliente.getContrasena())) {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
         if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
@@ -173,6 +178,9 @@ public class ClienteService {
         String detalle = ex.getMostSpecificCause().getMessage();
         if (detalle != null && detalle.toLowerCase().contains("email")) {
             return new ClienteDuplicadoException(MENSAJE_EMAIL_DUPLICADO);
+        }
+        if (detalle != null && detalle.toLowerCase().contains("usuario")) {
+            return new ClienteDuplicadoException(MENSAJE_USUARIO_DUPLICADO);
         }
         return new ClienteDuplicadoException(MENSAJE_DOCUMENTO_DUPLICADO);
     }
