@@ -451,6 +451,124 @@ class RegistroClienteTest {
         assertEquals("pendiente_de_validacion", clienteRepository.findById(clienteId).orElseThrow().getEstado());
     }
 
+    @Test
+    void ingresaCuandoElClienteEstaActivo() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(clienteId, "  900123456  ")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("activo", despues.getEstado());
+    }
+
+    @Test
+    void rechazaIngresoCuandoElNitNoCoincide() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(clienteId, "000000000")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("el usuario o la contraseña son inválidos"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("900123456", despues.getNitDocumento());
+        assertEquals("activo", despues.getEstado());
+    }
+
+    @Test
+    void rechazaIngresoCuandoElIdNoExiste() throws Exception {
+        long antes = clienteRepository.count();
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(UUID.randomUUID(), "900123456")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("el usuario o la contraseña son inválidos"));
+
+        assertEquals(antes, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaIngresoCuandoElNitCoincidePeroEstaInactivo() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_INACTIVO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(clienteId, "900123456")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está inactivo y debe contactar al banco"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("inactivo", despues.getEstado());
+        assertEquals("900123456", despues.getNitDocumento());
+    }
+
+    @Test
+    void rechazaIngresoCuandoElNitCoincidePeroEstaBloqueado() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_BLOQUEADO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(clienteId, "900123456")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("bloqueado", despues.getEstado());
+        assertEquals("900123456", despues.getNitDocumento());
+    }
+
+    @Test
+    void rechazaIngresoCuandoElNitCoincidePeroEstaPendiente() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson(clienteId, "900123456")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario aún no está activo y debe contactar al banco"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("pendiente_de_validacion", despues.getEstado());
+        assertEquals("900123456", despues.getNitDocumento());
+    }
+
+    @Test
+    void rechazaIngresoCuandoFaltanDatosOElIdEsInvalido() throws Exception {
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nitDocumento": "900123456"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: id cliente"));
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "idCliente": "no-es-uuid",
+                                  "nitDocumento": "900123456"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Debe corregir los siguientes datos: id cliente"));
+    }
+
     private UUID registrar(String nombre, String razon, String nit, String email, String telefono) throws Exception {
         MvcResult resultado = mockMvc.perform(post("/clientes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -472,6 +590,15 @@ class RegistroClienteTest {
         Cliente cliente = clienteRepository.findById(idCliente).orElseThrow();
         cliente.setEstado(estado);
         clienteRepository.saveAndFlush(cliente);
+    }
+
+    private String ingresoJson(UUID idCliente, String nitDocumento) {
+        return """
+                {
+                  "idCliente": "%s",
+                  "nitDocumento": "%s"
+                }
+                """.formatted(idCliente, nitDocumento);
     }
 
     private String estadoJson(String estado, String motivo, UUID actualizadoPor) {

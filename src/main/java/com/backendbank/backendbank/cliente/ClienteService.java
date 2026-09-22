@@ -19,6 +19,11 @@ public class ClienteService {
     static final String MENSAJE_CAMBIO_EXITOSO = "el cambio se realizó exitosamente";
     static final String MENSAJE_MISMO_ESTADO = "el cliente ya se encuentra en dicho estado";
     static final String MENSAJE_CAMBIO_NO_PERMITIDO = "el cambio de estado no está permitido desde el estado actual";
+    static final String MENSAJE_INGRESO = "ingreso exitoso";
+    static final String MENSAJE_CREDENCIALES = "el usuario o la contraseña son inválidos";
+    static final String MENSAJE_INACTIVO = "su usuario está inactivo y debe contactar al banco";
+    static final String MENSAJE_BLOQUEADO = "su usuario está bloqueado y debe contactar al banco";
+    static final String MENSAJE_PENDIENTE = "su usuario aún no está activo y debe contactar al banco";
 
     private final ClienteRepository clienteRepository;
 
@@ -128,6 +133,27 @@ public class ClienteService {
         return false;
     }
 
+    @Transactional(readOnly = true)
+    public IngresoResponse ingresar(IngresoRequest request) {
+        Cliente cliente = clienteRepository.findById(request.idCliente()).orElse(null);
+        if (cliente == null) {
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
+        }
+        if (!request.nitDocumento().trim().equals(cliente.getNitDocumento())) {
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
+        }
+        if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
+            return new IngresoResponse(cliente.getIdCliente(), cliente.getEstado(), MENSAJE_INGRESO);
+        }
+        if (Cliente.ESTADO_INACTIVO.equals(cliente.getEstado())) {
+            throw new IngresoRechazadoException(MENSAJE_INACTIVO);
+        }
+        if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
+            throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
+        }
+        throw new IngresoRechazadoException(MENSAJE_PENDIENTE);
+    }
+
     private Cliente exigirAdministrador(UUID actualizadoPor) {
         if (actualizadoPor == null) {
             throw new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO);
@@ -181,6 +207,20 @@ class AccesoDenegadoException extends RuntimeException {
 class CambioEstadoRechazadoException extends RuntimeException {
 
     CambioEstadoRechazadoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class CredencialesInvalidasException extends RuntimeException {
+
+    CredencialesInvalidasException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class IngresoRechazadoException extends RuntimeException {
+
+    IngresoRechazadoException(String mensaje) {
         super(mensaje);
     }
 }

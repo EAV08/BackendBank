@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -40,6 +41,11 @@ public class ClienteController {
     @PostMapping
     public ResponseEntity<RegistroClienteResponse> registrar(@Valid @RequestBody RegistroClienteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clienteService.registrar(request));
+    }
+
+    @PostMapping("/ingreso")
+    public ResponseEntity<IngresoResponse> ingresar(@Valid @RequestBody IngresoRequest request) {
+        return ResponseEntity.ok(clienteService.ingresar(request));
     }
 
     @PutMapping("/{idCliente}")
@@ -92,6 +98,22 @@ record RegistroClienteRequest(
 }
 
 record RegistroClienteResponse(UUID idCliente, String estado, String mensaje) {
+}
+
+record IngresoRequest(
+        @NotNull(message = "El id cliente debe completarse")
+        UUID idCliente,
+
+        @NotBlank(message = "El documento debe completarse")
+        @Size(max = 30, message = "El documento debe corregirse")
+        String nitDocumento
+) {
+    IngresoRequest {
+        nitDocumento = nitDocumento == null ? null : nitDocumento.trim();
+    }
+}
+
+record IngresoResponse(UUID idCliente, String estado, String mensaje) {
 }
 
 record ActualizarClienteRequest(
@@ -181,7 +203,8 @@ class ApiExceptionHandler {
             "email", "email",
             "telefono", "teléfono",
             "estado", "estado",
-            "motivo", "motivo"
+            "motivo", "motivo",
+            "idCliente", "id cliente"
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -229,6 +252,29 @@ class ApiExceptionHandler {
     @ExceptionHandler(AccesoDenegadoException.class)
     ResponseEntity<MensajeError> accesoDenegado(AccesoDenegadoException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    ResponseEntity<MensajeError> credencialesInvalidas(CredencialesInvalidasException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IngresoRechazadoException.class)
+    ResponseEntity<MensajeError> ingresoRechazado(IngresoRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ValidacionErrorResponse> cuerpoIlegible(HttpMessageNotReadableException ex) {
+        String detalle = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase();
+        if (detalle.contains("uuid")) {
+            return ResponseEntity.badRequest().body(new ValidacionErrorResponse(
+                    "Debe corregir los siguientes datos: id cliente",
+                    java.util.List.of(new CampoError("idCliente", "El id cliente debe corregirse"))));
+        }
+        return ResponseEntity.badRequest().body(new ValidacionErrorResponse(
+                "Debe corregir los siguientes datos: solicitud",
+                java.util.List.of(new CampoError("solicitud", "La solicitud debe corregirse"))));
     }
 
     private boolean esIncompleto(String codigo) {
