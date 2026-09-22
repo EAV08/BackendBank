@@ -4,6 +4,8 @@ CREATE TABLE clientes (
     razon_social     VARCHAR(200) NOT NULL,
     nit_documento    VARCHAR(30)  NOT NULL UNIQUE,
     email            VARCHAR(150) NOT NULL UNIQUE,
+    usuario          VARCHAR(80)  NOT NULL UNIQUE,
+    contrasena       VARCHAR(255) NOT NULL,
     telefono         VARCHAR(20),
     estado              VARCHAR(30)  NOT NULL DEFAULT 'activo'
                          CHECK (estado IN ('pendiente_de_validacion', 'activo', 'inactivo', 'bloqueado')),
