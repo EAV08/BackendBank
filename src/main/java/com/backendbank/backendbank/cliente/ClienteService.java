@@ -53,7 +53,7 @@ public class ClienteService {
         cliente.setNitDocumento(nitDocumento);
         cliente.setEmail(email);
         cliente.setTelefono(telefono);
-        cliente.setEstado(Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
+        cliente.setEstado(Cliente.ESTADO_ACTIVO);
         cliente.setRol(Cliente.ROL_CLIENTE);
 
         try {

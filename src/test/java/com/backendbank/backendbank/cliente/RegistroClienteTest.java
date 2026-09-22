@@ -39,14 +39,14 @@ class RegistroClienteTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.estado").value("pendiente_de_validacion"))
+                .andExpect(jsonPath("$.estado").value("activo"))
                 .andExpect(jsonPath("$.mensaje").value("registro exitoso"))
                 .andExpect(jsonPath("$.idCliente").isNotEmpty())
                 .andReturn();
 
         UUID idCliente = idDe(resultado);
         Cliente guardado = clienteRepository.findById(idCliente).orElseThrow();
-        assertEquals("pendiente_de_validacion", guardado.getEstado());
+        assertEquals("activo", guardado.getEstado());
         assertEquals("Tienda El Sol", guardado.getNombreComercial());
         assertEquals("900123456", guardado.getNitDocumento());
         assertEquals("contacto@elsol.com", guardado.getEmail());
@@ -58,7 +58,7 @@ class RegistroClienteTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(clienteJson("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", null)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.estado").value("pendiente_de_validacion"))
+                .andExpect(jsonPath("$.estado").value("activo"))
                 .andExpect(jsonPath("$.mensaje").value("registro exitoso"))
                 .andReturn();
 
@@ -124,7 +124,7 @@ class RegistroClienteTest {
                                 adminId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
-                .andExpect(jsonPath("$.estado").value("pendiente_de_validacion"))
+                .andExpect(jsonPath("$.estado").value("activo"))
                 .andExpect(jsonPath("$.nombreComercial").value("Tienda El Sol Actualizada"))
                 .andExpect(jsonPath("$.razonSocial").value("El Sol Actualizada S.A.S."))
                 .andExpect(jsonPath("$.email").value("contacto@elsol.com"))
@@ -243,7 +243,7 @@ class RegistroClienteTest {
         assertEquals("Tienda El Sol", sinCambios.getNombreComercial());
         assertEquals("contacto@elsol.com", sinCambios.getEmail());
         assertEquals("900123456", sinCambios.getNitDocumento());
-        assertEquals("pendiente_de_validacion", sinCambios.getEstado());
+        assertEquals("activo", sinCambios.getEstado());
         assertNull(sinCambios.getActualizadoPor());
     }
 
@@ -252,6 +252,7 @@ class RegistroClienteTest {
         UUID adminId = registrar("Admin Bank", "Admin S.A.S.", "100000001", "admin@bank.com", "3000000001");
         Cliente admin = clienteRepository.findById(adminId).orElseThrow();
         admin.setRol(Cliente.ROL_ADMINISTRADOR);
+        admin.setEstado(Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
         clienteRepository.saveAndFlush(admin);
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
 
@@ -343,6 +344,7 @@ class RegistroClienteTest {
     void rechazaActivarCuandoEstaPendienteDeValidacion() throws Exception {
         UUID adminId = registrarAdministrador();
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -423,6 +425,7 @@ class RegistroClienteTest {
     void rechazaInactivarCuandoElEstadoActualNoLoPermite() throws Exception {
         UUID adminId = registrarAdministrador();
         UUID pendienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(pendienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(patch("/clientes/" + pendienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -472,7 +475,7 @@ class RegistroClienteTest {
                 .andExpect(jsonPath("$.errores[0].campo").value("estado"))
                 .andExpect(jsonPath("$.errores[0].mensaje").value("El estado debe corregirse"));
 
-        assertEquals("pendiente_de_validacion", clienteRepository.findById(clienteId).orElseThrow().getEstado());
+        assertEquals("activo", clienteRepository.findById(clienteId).orElseThrow().getEstado());
     }
 
     @Test
@@ -557,6 +560,7 @@ class RegistroClienteTest {
     @Test
     void rechazaIngresoCuandoElNitCoincidePeroEstaPendiente() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)

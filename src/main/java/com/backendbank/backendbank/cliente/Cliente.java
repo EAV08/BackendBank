@@ -63,7 +63,7 @@ public class Cliente {
             idCliente = UUID.randomUUID();
         }
         if (estado == null || estado.isBlank()) {
-            estado = ESTADO_PENDIENTE_DE_VALIDACION;
+            estado = ESTADO_ACTIVO;
         }
         if (fechaRegistro == null) {
             fechaRegistro = OffsetDateTime.now();

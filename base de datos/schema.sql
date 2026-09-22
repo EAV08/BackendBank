@@ -5,7 +5,7 @@ CREATE TABLE clientes (
     nit_documento    VARCHAR(30)  NOT NULL UNIQUE,
     email            VARCHAR(150) NOT NULL UNIQUE,
     telefono         VARCHAR(20),
-    estado              VARCHAR(30)  NOT NULL DEFAULT 'pendiente_de_validacion'
+    estado              VARCHAR(30)  NOT NULL DEFAULT 'activo'
                          CHECK (estado IN ('pendiente_de_validacion', 'activo', 'inactivo', 'bloqueado')),
     fecha_registro      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     rol                 VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE'
