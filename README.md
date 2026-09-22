@@ -141,8 +141,15 @@ cliente, cuenta o transacción repetida entre filas.
 | `reportes` | `id_reporte` | `id_cliente` → `clientes` | `contenido` en JSONB para el resumen agregado |
 
 ---
+# Diagrama de paquetes
+
 ![Diagrama de paquetes](./Diagramas/diagrama_de_paquetes_EAV08.drawio.png)
+
+# Diagrama de despliegue
+
 ![Diagrama de paquetes](./Diagramas/diagrama_de_desplique_EAV08.drawio.png)
+
+# Diagrama de componentes
 ![Diagrama de paquetes](./Diagramas/diagrama_de_componentes_EAV08.drawio.png)
 
 
