@@ -1,3 +1,4 @@
+
 # BD-EAV08-2026-2
 Repositorio para entregables propios de la materia de Bases de datos y laboratorios del equipo avanzado 8 de la edición 26-2 de CodeF@ctory, equipo conformado por:
 
@@ -97,6 +98,7 @@ erDiagram
         jsonb contenido
     }
 ```
+
 ### Relaciones y cardinalidad
 
 - Un cliente puede tener una o muchas cuentas bancarias; una cuenta bancaria pertenece a uno y solo un cliente(pasando por alto cuentas de entidades menores como cooperativas donde una cuenta puede tener más de 1 titular). 
@@ -139,12 +141,17 @@ cliente, cuenta o transacción repetida entre filas.
 | `reportes` | `id_reporte` | `id_cliente` → `clientes` | `contenido` en JSONB para el resumen agregado |
 
 ---
+![Diagrama de paquetes](./Diagramas/diagrama_de_paquetes_EAV08.drawio.png)
+![Diagrama de paquetes](./Diagramas/diagrama_de_desplique_EAV08.drawio.png)
+![Diagrama de paquetes](./Diagramas/diagrama_de_componentes_EAV08.drawio.png)
+
 
 # Criterio 4- Modelo Fisico
 
 Ver [`schema.sql`](./schema.sql)
 
 1 Versión
+
 
 
 
