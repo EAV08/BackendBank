@@ -11,5 +11,6 @@ CREATE TABLE clientes (
     rol                 VARCHAR(20)  NOT NULL DEFAULT 'CLIENTE'
                          CHECK (rol IN ('CLIENTE', 'ADMINISTRADOR')),
     actualizado_por     UUID,
-    fecha_actualizacion TIMESTAMPTZ
+    fecha_actualizacion TIMESTAMPTZ,
+    motivo              VARCHAR(200)
 );

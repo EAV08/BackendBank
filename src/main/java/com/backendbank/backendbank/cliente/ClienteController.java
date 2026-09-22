@@ -4,12 +4,14 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -45,6 +47,13 @@ public class ClienteController {
             @PathVariable UUID idCliente,
             @Valid @RequestBody ActualizarClienteRequest request) {
         return ResponseEntity.ok(clienteService.actualizar(idCliente, request));
+    }
+
+    @PatchMapping("/{idCliente}/estado")
+    public ResponseEntity<CambiarEstadoResponse> cambiarEstado(
+            @PathVariable UUID idCliente,
+            @Valid @RequestBody CambiarEstadoRequest request) {
+        return ResponseEntity.ok(clienteService.cambiarEstado(idCliente, request));
     }
 }
 
@@ -128,6 +137,31 @@ record ActualizarClienteResponse(
 ) {
 }
 
+record CambiarEstadoRequest(
+        @NotBlank(message = "El estado debe completarse")
+        @Pattern(regexp = "(activo|inactivo)?", message = "El estado debe corregirse")
+        String estado,
+
+        @NotBlank(message = "El motivo debe completarse")
+        @Size(max = 200, message = "El motivo debe corregirse")
+        String motivo,
+
+        @NotNull
+        UUID actualizadoPor
+) {
+    CambiarEstadoRequest {
+        estado = recortar(estado);
+        motivo = recortar(motivo);
+    }
+
+    private static String recortar(String valor) {
+        return valor == null ? null : valor.trim();
+    }
+}
+
+record CambiarEstadoResponse(UUID idCliente, String estado, String motivo, String mensaje) {
+}
+
 record CampoError(String campo, String mensaje) {
 }
 
@@ -145,7 +179,9 @@ class ApiExceptionHandler {
             "razonSocial", "razón social",
             "nitDocumento", "documento",
             "email", "email",
-            "telefono", "teléfono"
+            "telefono", "teléfono",
+            "estado", "estado",
+            "motivo", "motivo"
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -173,6 +209,11 @@ class ApiExceptionHandler {
 
         return ResponseEntity.badRequest()
                 .body(new ValidacionErrorResponse(construirMensaje(incompletos, corregir), errores));
+    }
+
+    @ExceptionHandler(CambioEstadoRechazadoException.class)
+    ResponseEntity<MensajeError> cambioEstadoRechazado(CambioEstadoRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new MensajeError(ex.getMessage()));
     }
 
     @ExceptionHandler(ClienteDuplicadoException.class)

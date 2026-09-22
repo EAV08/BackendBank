@@ -16,6 +16,9 @@ public class ClienteService {
     static final String MENSAJE_EMAIL_DUPLICADO = "ya existe un cliente registrado con ese email";
     static final String MENSAJE_NO_ENCONTRADO = "el cliente no fue encontrado";
     static final String MENSAJE_NO_AUTORIZADO = "no cuento con autorización para realizar esta acción";
+    static final String MENSAJE_CAMBIO_EXITOSO = "el cambio se realizó exitosamente";
+    static final String MENSAJE_MISMO_ESTADO = "el cliente ya se encuentra en dicho estado";
+    static final String MENSAJE_CAMBIO_NO_PERMITIDO = "el cambio de estado no está permitido desde el estado actual";
 
     private final ClienteRepository clienteRepository;
 
@@ -88,6 +91,43 @@ public class ClienteService {
         }
     }
 
+    @Transactional
+    public CambiarEstadoResponse cambiarEstado(UUID idCliente, CambiarEstadoRequest request) {
+        Cliente actor = exigirAdministrador(request.actualizadoPor());
+        Cliente cliente = clienteRepository.findById(idCliente)
+                .orElseThrow(() -> new ClienteNoEncontradoException(MENSAJE_NO_ENCONTRADO));
+
+        String estadoSolicitado = request.estado().trim();
+        if (estadoSolicitado.equals(cliente.getEstado())) {
+            throw new CambioEstadoRechazadoException(MENSAJE_MISMO_ESTADO);
+        }
+        if (!transicionPermitida(cliente, estadoSolicitado)) {
+            throw new CambioEstadoRechazadoException(MENSAJE_CAMBIO_NO_PERMITIDO);
+        }
+
+        cliente.setEstado(estadoSolicitado);
+        cliente.setMotivo(request.motivo().trim());
+        cliente.setActualizadoPor(actor.getIdCliente());
+        cliente.setFechaActualizacion(OffsetDateTime.now());
+
+        Cliente guardado = clienteRepository.saveAndFlush(cliente);
+        return new CambiarEstadoResponse(
+                guardado.getIdCliente(),
+                guardado.getEstado(),
+                guardado.getMotivo(),
+                MENSAJE_CAMBIO_EXITOSO);
+    }
+
+    private boolean transicionPermitida(Cliente cliente, String estadoSolicitado) {
+        if (Cliente.ESTADO_INACTIVO.equals(estadoSolicitado)) {
+            return Cliente.ESTADO_ACTIVO.equals(cliente.getEstado());
+        }
+        if (Cliente.ESTADO_ACTIVO.equals(estadoSolicitado)) {
+            return Cliente.ESTADO_INACTIVO.equals(cliente.getEstado());
+        }
+        return false;
+    }
+
     private Cliente exigirAdministrador(UUID actualizadoPor) {
         if (actualizadoPor == null) {
             throw new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO);
@@ -134,6 +174,13 @@ class ClienteNoEncontradoException extends RuntimeException {
 class AccesoDenegadoException extends RuntimeException {
 
     AccesoDenegadoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class CambioEstadoRechazadoException extends RuntimeException {
+
+    CambioEstadoRechazadoException(String mensaje) {
         super(mensaje);
     }
 }

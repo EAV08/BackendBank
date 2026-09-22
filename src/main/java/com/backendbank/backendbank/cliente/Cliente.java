@@ -14,6 +14,9 @@ import java.util.UUID;
 public class Cliente {
 
     public static final String ESTADO_PENDIENTE_DE_VALIDACION = "pendiente_de_validacion";
+    public static final String ESTADO_ACTIVO = "activo";
+    public static final String ESTADO_INACTIVO = "inactivo";
+    public static final String ESTADO_BLOQUEADO = "bloqueado";
     public static final String ROL_CLIENTE = "CLIENTE";
     public static final String ROL_ADMINISTRADOR = "ADMINISTRADOR";
 
@@ -50,6 +53,9 @@ public class Cliente {
 
     @Column(name = "fecha_actualizacion")
     private OffsetDateTime fechaActualizacion;
+
+    @Column(name = "motivo", length = 200)
+    private String motivo;
 
     @PrePersist
     void asignarValoresIniciales() {
@@ -145,5 +151,13 @@ public class Cliente {
 
     public void setFechaActualizacion(OffsetDateTime fechaActualizacion) {
         this.fechaActualizacion = fechaActualizacion;
+    }
+
+    public String getMotivo() {
+        return motivo;
+    }
+
+    public void setMotivo(String motivo) {
+        this.motivo = motivo;
     }
 }
