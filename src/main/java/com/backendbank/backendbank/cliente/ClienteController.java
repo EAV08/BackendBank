@@ -213,8 +213,8 @@ class ApiExceptionHandler {
                 .filter(error -> !"actualizadoPor".equals(error.getField()))
                 .toList();
         if (datos.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(new MensajeError(ClienteService.MENSAJE_NO_AUTORIZADO));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MensajeError(ClienteService.MENSAJE_SESION));
         }
 
         List<CampoError> errores = new ArrayList<>();
@@ -252,6 +252,11 @@ class ApiExceptionHandler {
     @ExceptionHandler(AccesoDenegadoException.class)
     ResponseEntity<MensajeError> accesoDenegado(AccesoDenegadoException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(SesionNoVigenteException.class)
+    ResponseEntity<MensajeError> sesionNoVigente(SesionNoVigenteException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
     }
 
     @ExceptionHandler(CredencialesInvalidasException.class)

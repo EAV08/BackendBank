@@ -16,6 +16,7 @@ public class ClienteService {
     static final String MENSAJE_EMAIL_DUPLICADO = "ya existe un cliente registrado con ese email";
     static final String MENSAJE_NO_ENCONTRADO = "el cliente no fue encontrado";
     static final String MENSAJE_NO_AUTORIZADO = "no cuento con autorización para realizar esta acción";
+    static final String MENSAJE_SESION = "debe ingresar de nuevo";
     static final String MENSAJE_CAMBIO_EXITOSO = "el cambio se realizó exitosamente";
     static final String MENSAJE_MISMO_ESTADO = "el cliente ya se encuentra en dicho estado";
     static final String MENSAJE_CAMBIO_NO_PERMITIDO = "el cambio de estado no está permitido desde el estado actual";
@@ -156,10 +157,12 @@ public class ClienteService {
 
     private Cliente exigirAdministrador(UUID actualizadoPor) {
         if (actualizadoPor == null) {
-            throw new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO);
+            throw new SesionNoVigenteException(MENSAJE_SESION);
         }
-        Cliente actor = clienteRepository.findById(actualizadoPor)
-                .orElseThrow(() -> new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO));
+        Cliente actor = clienteRepository.findById(actualizadoPor).orElse(null);
+        if (actor == null || !Cliente.ESTADO_ACTIVO.equals(actor.getEstado())) {
+            throw new SesionNoVigenteException(MENSAJE_SESION);
+        }
         if (!Cliente.ROL_ADMINISTRADOR.equals(actor.getRol())) {
             throw new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO);
         }
@@ -200,6 +203,13 @@ class ClienteNoEncontradoException extends RuntimeException {
 class AccesoDenegadoException extends RuntimeException {
 
     AccesoDenegadoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class SesionNoVigenteException extends RuntimeException {
+
+    SesionNoVigenteException(String mensaje) {
         super(mensaje);
     }
 }

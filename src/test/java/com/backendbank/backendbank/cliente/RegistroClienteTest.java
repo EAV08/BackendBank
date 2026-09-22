@@ -204,6 +204,7 @@ class RegistroClienteTest {
     void rechazaActualizacionCuandoElActorNoEstaAutorizado() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         UUID otroClienteId = registrar("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", null);
+        fijarEstado(otroClienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(put("/clientes/" + clienteId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -224,8 +225,8 @@ class RegistroClienteTest {
                                 "nuevo@elsol.com",
                                 "3110000000",
                                 UUID.randomUUID())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("no cuento con autorización para realizar esta acción"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
         mockMvc.perform(put("/clientes/" + clienteId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -235,8 +236,8 @@ class RegistroClienteTest {
                                 "nuevo@elsol.com",
                                 "3110000000",
                                 null)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("no cuento con autorización para realizar esta acción"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
         Cliente sinCambios = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("Tienda El Sol", sinCambios.getNombreComercial());
@@ -244,6 +245,28 @@ class RegistroClienteTest {
         assertEquals("900123456", sinCambios.getNitDocumento());
         assertEquals("pendiente_de_validacion", sinCambios.getEstado());
         assertNull(sinCambios.getActualizadoPor());
+    }
+
+    @Test
+    void rechazaAccionCuandoElAdministradorNoEstaActivo() throws Exception {
+        UUID adminId = registrar("Admin Bank", "Admin S.A.S.", "100000001", "admin@bank.com", "3000000001");
+        Cliente admin = clienteRepository.findById(adminId).orElseThrow();
+        admin.setRol(Cliente.ROL_ADMINISTRADOR);
+        clienteRepository.saveAndFlush(admin);
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+
+        mockMvc.perform(put("/clientes/" + clienteId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(actualizacionJson(
+                                "Nombre Cambiado",
+                                "Razon Cambiada",
+                                "nuevo@elsol.com",
+                                "3110000000",
+                                adminId)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
+
+        assertEquals("Tienda El Sol", clienteRepository.findById(clienteId).orElseThrow().getNombreComercial());
     }
 
     @Test
@@ -370,6 +393,7 @@ class RegistroClienteTest {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
         UUID otroClienteId = registrar("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", null);
+        fijarEstado(otroClienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -380,14 +404,14 @@ class RegistroClienteTest {
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "Cierre", UUID.randomUUID())))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("no cuento con autorización para realizar esta acción"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "Cierre", null)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("no cuento con autorización para realizar esta acción"));
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
         Cliente sinCambios = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("activo", sinCambios.getEstado());
@@ -582,6 +606,7 @@ class RegistroClienteTest {
         UUID adminId = registrar("Admin Bank", "Admin S.A.S.", "100000001", "admin@bank.com", "3000000001");
         Cliente admin = clienteRepository.findById(adminId).orElseThrow();
         admin.setRol(Cliente.ROL_ADMINISTRADOR);
+        admin.setEstado(Cliente.ESTADO_ACTIVO);
         clienteRepository.saveAndFlush(admin);
         return adminId;
     }
