@@ -9,4 +9,6 @@ public interface ClienteRepository extends JpaRepository<Cliente, UUID> {
     boolean existsByNitDocumento(String nitDocumento);
 
     boolean existsByEmail(String email);
+
+    boolean existsByEmailAndIdClienteNot(String email, UUID idCliente);
 }

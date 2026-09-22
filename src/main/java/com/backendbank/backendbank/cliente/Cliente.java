@@ -14,6 +14,8 @@ import java.util.UUID;
 public class Cliente {
 
     public static final String ESTADO_PENDIENTE_DE_VALIDACION = "pendiente_de_validacion";
+    public static final String ROL_CLIENTE = "CLIENTE";
+    public static final String ROL_ADMINISTRADOR = "ADMINISTRADOR";
 
     @Id
     @Column(name = "id_cliente", nullable = false, updatable = false)
@@ -40,6 +42,15 @@ public class Cliente {
     @Column(name = "fecha_registro", nullable = false, updatable = false)
     private OffsetDateTime fechaRegistro;
 
+    @Column(name = "rol", nullable = false, length = 20)
+    private String rol;
+
+    @Column(name = "actualizado_por")
+    private UUID actualizadoPor;
+
+    @Column(name = "fecha_actualizacion")
+    private OffsetDateTime fechaActualizacion;
+
     @PrePersist
     void asignarValoresIniciales() {
         if (idCliente == null) {
@@ -50,6 +61,9 @@ public class Cliente {
         }
         if (fechaRegistro == null) {
             fechaRegistro = OffsetDateTime.now();
+        }
+        if (rol == null || rol.isBlank()) {
+            rol = ROL_CLIENTE;
         }
     }
 
@@ -107,5 +121,29 @@ public class Cliente {
 
     public OffsetDateTime getFechaRegistro() {
         return fechaRegistro;
+    }
+
+    public String getRol() {
+        return rol;
+    }
+
+    public void setRol(String rol) {
+        this.rol = rol;
+    }
+
+    public UUID getActualizadoPor() {
+        return actualizadoPor;
+    }
+
+    public void setActualizadoPor(UUID actualizadoPor) {
+        this.actualizadoPor = actualizadoPor;
+    }
+
+    public OffsetDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(OffsetDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 }
