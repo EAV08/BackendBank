@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# BackendBank
-=======
 
 # EAV08-2026-2
 
@@ -109,4 +106,3 @@ Ver [`schema.sql`](./schema.sql)
 
 
 
->>>>>>> 6eed9a52d9d46bc63a70d39e5f7ffc117deeb4da

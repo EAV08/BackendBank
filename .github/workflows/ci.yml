@@ -1,0 +1,54 @@
+# Integración continua del Sprint 2, semana 1.
+# En cada push y en cada pull request GitHub Actions compila, corre JUnit
+# y guarda la evidencia (Surefire y JaCoCo). No despliega la aplicación:
+# el CD y SonarQube se agregan después, sobre este mismo pipeline.
+# Las pruebas usan H2 en memoria (src/test/resources/application.properties),
+# así que este job no necesita PostgreSQL ni secrets de base de datos.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Baja el commit que disparó el workflow.
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # El pom declara Java 17. Temurin es la distribución y cache: maven
+      # reutiliza ~/.m2 entre ejecuciones para no bajar dependencias cada vez.
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # El repo se trabaja desde Windows, donde Git no marca mvnw como ejecutable.
+      # En el runner de Ubuntu hay que dar ese permiso antes de llamarlo.
+      - name: Permiso de ejecución del wrapper
+        run: chmod +x mvnw
+
+      # -B evita prompts. El wrapper baja Maven 3.9.16 (ver .mvn/wrapper).
+      # mvn test compila, ejecuta RegistroClienteTest y genera el reporte JaCoCo
+      # porque el plugin está atado a la fase test en el pom.
+      - name: Compilar y ejecutar pruebas
+        run: ./mvnw -B test
+
+      # if: always() sube los reportes también cuando alguna prueba falla,
+      # para que Calidad pueda descargarlos desde la pestaña Actions.
+      # if-no-files-found: warn evita que este paso tumbe el job si JaCoCo
+      # no alcanzó a escribir el HTML.
+      - name: Guardar evidencia de pruebas y cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-ci
+          if-no-files-found: warn
+          path: |
+            target/surefire-reports
+            target/site/jacoco
