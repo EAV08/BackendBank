@@ -129,7 +129,7 @@ record IngresoRequest(
     }
 }
 
-record IngresoResponse(UUID idCliente, String estado, String mensaje) {
+record IngresoResponse(UUID idCliente, String estado, String mensaje, String token) {
 }
 
 record ActualizarClienteRequest(

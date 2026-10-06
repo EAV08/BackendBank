@@ -63,6 +63,9 @@ public class Cliente {
     @Column(name = "motivo", length = 200)
     private String motivo;
 
+    @Column(name = "intentos_fallidos", nullable = false)
+    private int intentosFallidos;
+
     @PrePersist
     void asignarValoresIniciales() {
         if (idCliente == null) {
@@ -181,5 +184,13 @@ public class Cliente {
 
     public void setMotivo(String motivo) {
         this.motivo = motivo;
+    }
+
+    public int getIntentosFallidos() {
+        return intentosFallidos;
+    }
+
+    public void setIntentosFallidos(int intentosFallidos) {
+        this.intentosFallidos = intentosFallidos;
     }
 }

@@ -1,6 +1,8 @@
 package com.backendbank.backendbank.cliente;
 
+import com.backendbank.backendbank.seguridad.TokenService;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +28,22 @@ public class ClienteService {
     static final String MENSAJE_INACTIVO = "su usuario está inactivo y debe contactar al banco";
     static final String MENSAJE_BLOQUEADO = "su usuario está bloqueado y debe contactar al banco";
     static final String MENSAJE_PENDIENTE = "su usuario aún no está activo y debe contactar al banco";
+    static final int MAX_INTENTOS_FALLIDOS = 3;
+    static final String MOTIVO_BLOQUEO = "bloqueado por intentos fallidos de ingreso";
 
     private final ClienteRepository clienteRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
+    private final String hashFicticio;
 
-    public ClienteService(ClienteRepository clienteRepository) {
+    public ClienteService(
+            ClienteRepository clienteRepository,
+            PasswordEncoder passwordEncoder,
+            TokenService tokenService) {
         this.clienteRepository = clienteRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.tokenService = tokenService;
+        this.hashFicticio = passwordEncoder.encode("contrasena-ficticia");
     }
 
     @Transactional
@@ -59,7 +72,7 @@ public class ClienteService {
         cliente.setNitDocumento(nitDocumento);
         cliente.setEmail(email);
         cliente.setUsuario(usuario);
-        cliente.setContrasena(contrasena);
+        cliente.setContrasena(passwordEncoder.encode(contrasena));
         cliente.setTelefono(telefono);
         cliente.setEstado(Cliente.ESTADO_ACTIVO);
         cliente.setRol(Cliente.ROL_CLIENTE);
@@ -142,14 +155,26 @@ public class ClienteService {
         return false;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(noRollbackFor = {CredencialesInvalidasException.class, IngresoRechazadoException.class})
     public IngresoResponse ingresar(IngresoRequest request) {
         Cliente cliente = clienteRepository.findByUsuario(request.usuario()).orElse(null);
-        if (cliente == null || !request.contrasena().equals(cliente.getContrasena())) {
+        if (cliente == null) {
+            passwordEncoder.matches(request.contrasena(), hashFicticio);
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
+        }
+        if (!contrasenaCoincide(cliente, request.contrasena())) {
+            if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
+                registrarIntentoFallido(cliente);
+            }
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
         if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
-            return new IngresoResponse(cliente.getIdCliente(), cliente.getEstado(), MENSAJE_INGRESO);
+            if (cliente.getIntentosFallidos() != 0) {
+                cliente.setIntentosFallidos(0);
+                clienteRepository.saveAndFlush(cliente);
+            }
+            String token = tokenService.generar(cliente.getIdCliente(), cliente.getUsuario(), cliente.getRol());
+            return new IngresoResponse(cliente.getIdCliente(), cliente.getEstado(), MENSAJE_INGRESO, token);
         }
         if (Cliente.ESTADO_INACTIVO.equals(cliente.getEstado())) {
             throw new IngresoRechazadoException(MENSAJE_INACTIVO);
@@ -158,6 +183,33 @@ public class ClienteService {
             throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
         }
         throw new IngresoRechazadoException(MENSAJE_PENDIENTE);
+    }
+
+    private boolean contrasenaCoincide(Cliente cliente, String plana) {
+        String almacenada = cliente.getContrasena();
+        if (almacenada != null && (almacenada.startsWith("$2a$") || almacenada.startsWith("$2b$") || almacenada.startsWith("$2y$"))) {
+            return passwordEncoder.matches(plana, almacenada);
+        }
+        if (!plana.equals(almacenada)) {
+            return false;
+        }
+        cliente.setContrasena(passwordEncoder.encode(plana));
+        clienteRepository.saveAndFlush(cliente);
+        return true;
+    }
+
+    private void registrarIntentoFallido(Cliente cliente) {
+        int intentos = cliente.getIntentosFallidos() + 1;
+        cliente.setIntentosFallidos(intentos);
+        if (intentos >= MAX_INTENTOS_FALLIDOS) {
+            cliente.setEstado(Cliente.ESTADO_BLOQUEADO);
+            cliente.setMotivo(MOTIVO_BLOQUEO);
+            cliente.setFechaActualizacion(OffsetDateTime.now());
+        }
+        clienteRepository.saveAndFlush(cliente);
+        if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
+            throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
+        }
     }
 
     private Cliente exigirAdministrador(UUID actualizadoPor) {

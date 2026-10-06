@@ -14,8 +14,12 @@ CREATE TABLE clientes (
                          CHECK (rol IN ('CLIENTE', 'ADMINISTRADOR')),
     actualizado_por     UUID,
     fecha_actualizacion TIMESTAMPTZ,
-    motivo              VARCHAR(200)
+    motivo              VARCHAR(200),
+    intentos_fallidos   INTEGER      NOT NULL DEFAULT 0
 );
+
+-- Si la tabla ya existe, ejecutar solo esta sentencia:
+-- ALTER TABLE clientes ADD COLUMN IF NOT EXISTS intentos_fallidos INTEGER NOT NULL DEFAULT 0;
 
 UPDATE clientes
 SET rol = 'ADMINISTRADOR',
