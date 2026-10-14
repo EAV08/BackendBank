@@ -29,6 +29,11 @@
 	<properties>
 		<java.version>17</java.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
+		<sonar.projectKey>EAV08_BackendBank</sonar.projectKey>
+    	<sonar.organization>eav08</sonar.organization>
+    	<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+    	<sonar.java.source>17</sonar.java.source>
+    	<sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -87,6 +92,33 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<!--
+				JaCoCo mide la cobertura de las pruebas unitarias (semana 1 del Sprint 2).
+				prepare-agent engancha el agente antes de JUnit.
+				report, atado a la fase test, escribe el HTML en target/site/jacoco
+				cuando se ejecuta ./mvnw test. GitHub Actions sube esa carpeta como evidencia.
+				SonarQube, previsto para la semana 2, reutiliza este mismo reporte.
+			-->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

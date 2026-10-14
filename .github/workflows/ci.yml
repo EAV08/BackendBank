@@ -1,0 +1,62 @@
+# Integración continua del Sprint 2.
+# En cada push y en cada pull request GitHub Actions compila, corre JUnit,
+# publica el análisis en SonarCloud y guarda la evidencia (Surefire y JaCoCo).
+# No despliega la aplicación.
+# Las pruebas usan H2 en memoria (src/test/resources/application.properties),
+# así que este job no necesita PostgreSQL. El análisis sí necesita el secret
+# SONAR_TOKEN (token de SonarCloud, no va en el repositorio).
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Baja el commit que disparó el workflow.
+      # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
+      # detectar el código nuevo y atribuir las líneas.
+      - name: Descargar el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # El pom declara Java 17. Temurin es la distribución y cache: maven
+      # reutiliza ~/.m2 entre ejecuciones para no bajar dependencias cada vez.
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      # El repo se trabaja desde Windows, donde Git no marca mvnw como ejecutable.
+      # En el runner de Ubuntu hay que dar ese permiso antes de llamarlo.
+      - name: Permiso de ejecución del wrapper
+        run: chmod +x mvnw
+
+      # -B evita prompts. verify incluye test, así que JaCoCo escribe
+      # target/site/jacoco/jacoco.xml antes de que el scanner lo lea.
+      # SONAR_TOKEN autentica contra SonarCloud. La clave, la organización
+      # y la URL están en el pom.
+      - name: Compilar, probar y analizar con SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+
+      # if: always() sube los reportes también cuando alguna prueba falla,
+      # para que Calidad pueda descargarlos desde la pestaña Actions.
+      # if-no-files-found: warn evita que este paso tumbe el job si JaCoCo
+      # no alcanzó a escribir el HTML.
+      - name: Guardar evidencia de pruebas y cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportes-ci
+          if-no-files-found: warn
+          path: |
+            target/surefire-reports
+            target/site/jacoco
