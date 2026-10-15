@@ -17,7 +17,7 @@ public class ClienteService {
     static final String MENSAJE_DOCUMENTO_DUPLICADO = "ya existe un cliente registrado con ese documento";
     static final String MENSAJE_EMAIL_DUPLICADO = "ya existe un cliente registrado con ese email";
     static final String MENSAJE_USUARIO_DUPLICADO = "ya existe un cliente registrado con ese usuario";
-    static final String MENSAJE_NO_ENCONTRADO = "el cliente no fue encontrado";
+    public static final String MENSAJE_NO_ENCONTRADO = "el cliente no fue encontrado";
     static final String MENSAJE_NO_AUTORIZADO = "no cuento con autorización para realizar esta acción";
     static final String MENSAJE_SESION = "debe ingresar de nuevo";
     static final String MENSAJE_CAMBIO_EXITOSO = "el cambio se realizó exitosamente";
@@ -25,7 +25,7 @@ public class ClienteService {
     static final String MENSAJE_CAMBIO_NO_PERMITIDO = "el cambio de estado no está permitido desde el estado actual";
     static final String MENSAJE_INGRESO = "ingreso exitoso";
     static final String MENSAJE_CREDENCIALES = "el usuario o la contraseña son inválidos";
-    static final String MENSAJE_INACTIVO = "su usuario está inactivo y debe contactar al banco";
+    public static final String MENSAJE_INACTIVO = "su usuario está inactivo y debe contactar al banco";
     static final String MENSAJE_BLOQUEADO = "su usuario está bloqueado y debe contactar al banco";
     static final String MENSAJE_PENDIENTE = "su usuario aún no está activo y debe contactar al banco";
     static final int MAX_INTENTOS_FALLIDOS = 3;
@@ -249,13 +249,6 @@ public class ClienteService {
 class ClienteDuplicadoException extends RuntimeException {
 
     ClienteDuplicadoException(String mensaje) {
-        super(mensaje);
-    }
-}
-
-class ClienteNoEncontradoException extends RuntimeException {
-
-    ClienteNoEncontradoException(String mensaje) {
         super(mensaje);
     }
 }

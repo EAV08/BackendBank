@@ -18,6 +18,18 @@ CREATE TABLE clientes (
     intentos_fallidos   INTEGER      NOT NULL DEFAULT 0
 );
 
+CREATE TABLE cuentas (
+    id_cuenta                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_cliente               UUID          NOT NULL REFERENCES clientes (id_cliente),
+    numero_cuenta            VARCHAR(20)   NOT NULL UNIQUE,
+    estado                   VARCHAR(30)   NOT NULL DEFAULT 'activo'
+                             CHECK (estado IN ('activo', 'inactivo', 'bloqueado')),
+    motivo                   VARCHAR(200),
+    operaciones_suspendidas  BOOLEAN       NOT NULL DEFAULT FALSE,
+    fecha_vinculacion        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    fecha_actualizacion      TIMESTAMPTZ
+);
+
 -- Si la tabla ya existe, ejecutar solo esta sentencia:
 -- ALTER TABLE clientes ADD COLUMN IF NOT EXISTS intentos_fallidos INTEGER NOT NULL DEFAULT 0;
 
@@ -29,4 +41,5 @@ WHERE usuario = 'admin';
 
 Select * from clientes;
 
-Drop table clientes;
+DROP TABLE cuentas;
+DROP TABLE clientes;
