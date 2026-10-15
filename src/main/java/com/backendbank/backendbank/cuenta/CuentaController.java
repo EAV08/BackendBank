@@ -28,6 +28,11 @@ public class CuentaController {
     public ResponseEntity<CuentaCreadaResponse> crear(@Valid @RequestBody CrearCuentaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(cuentaService.crear(request));
     }
+
+    @PostMapping("/saldo")
+    public ResponseEntity<SaldoDisponibleResponse> consultar(@Valid @RequestBody ConsultarSaldoRequest request) {
+        return ResponseEntity.ok(cuentaService.consultar(request));
+    }
 }
 
 record CrearCuentaRequest(
@@ -37,6 +42,25 @@ record CrearCuentaRequest(
 }
 
 record CuentaCreadaResponse(
+        UUID idCuenta,
+        String numeroCuenta,
+        UUID idCliente,
+        String estado,
+        BigDecimal saldo,
+        String mensaje
+) {
+}
+
+record ConsultarSaldoRequest(
+        @NotNull(message = "El id cliente debe completarse")
+        UUID idCliente,
+
+        @NotNull(message = "El id cuenta debe completarse")
+        UUID idCuenta
+) {
+}
+
+record SaldoDisponibleResponse(
         UUID idCuenta,
         String numeroCuenta,
         UUID idCliente,
@@ -60,5 +84,20 @@ class CuentaExceptionHandler {
     @ExceptionHandler(GeneracionCuentaException.class)
     ResponseEntity<MensajeError> generacionFallida(GeneracionCuentaException ex) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ConsultaSaldoRechazadaException.class)
+    ResponseEntity<MensajeError> consultaRechazada(ConsultaSaldoRechazadaException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ConsultaSaldoNoDisponibleException.class)
+    ResponseEntity<MensajeError> saldoNoDisponible(ConsultaSaldoNoDisponibleException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CuentaNoEncontradaException.class)
+    ResponseEntity<MensajeError> cuentaNoEncontrada(CuentaNoEncontradaException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MensajeError(ex.getMessage()));
     }
 }

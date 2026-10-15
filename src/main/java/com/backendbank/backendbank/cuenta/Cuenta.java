@@ -57,6 +57,10 @@ public class Cuenta {
         return idCuenta;
     }
 
+    public void setIdCuenta(UUID idCuenta) {
+        this.idCuenta = idCuenta;
+    }
+
     public UUID getIdCliente() {
         return idCliente;
     }
