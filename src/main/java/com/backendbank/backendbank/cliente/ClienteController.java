@@ -212,17 +212,18 @@ record MensajeError(String mensaje) {
 @RestControllerAdvice
 class ApiExceptionHandler {
 
-    private static final Map<String, String> ETIQUETAS = Map.of(
-            "nombreComercial", "nombre comercial",
-            "razonSocial", "razón social",
-            "nitDocumento", "documento",
-            "email", "email",
-            "usuario", "usuario",
-            "contrasena", "contraseña",
-            "telefono", "teléfono",
-            "estado", "estado",
-            "motivo", "motivo",
-            "idCliente", "id cliente"
+    private static final Map<String, String> ETIQUETAS = Map.ofEntries(
+            Map.entry("nombreComercial", "nombre comercial"),
+            Map.entry("razonSocial", "razón social"),
+            Map.entry("nitDocumento", "documento"),
+            Map.entry("email", "email"),
+            Map.entry("usuario", "usuario"),
+            Map.entry("contrasena", "contraseña"),
+            Map.entry("telefono", "teléfono"),
+            Map.entry("estado", "estado"),
+            Map.entry("motivo", "motivo"),
+            Map.entry("idCliente", "id cliente"),
+            Map.entry("numeroCuenta", "número de cuenta")
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
