@@ -19,13 +19,16 @@ CREATE TABLE clientes (
 );
 
 CREATE TABLE cuentas (
-    id_cuenta         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    id_cliente        UUID           NOT NULL REFERENCES clientes (id_cliente),
-    numero_cuenta     VARCHAR(20)    NOT NULL UNIQUE,
-    estado            VARCHAR(30)    NOT NULL DEFAULT 'activo'
-                      CHECK (estado IN ('activo', 'inactivo', 'bloqueado')),
-    saldo             NUMERIC(19, 2) NOT NULL DEFAULT 0,
-    fecha_vinculacion TIMESTAMPTZ    NOT NULL DEFAULT now()
+    id_cuenta                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_cliente               UUID           NOT NULL REFERENCES clientes (id_cliente),
+    numero_cuenta            VARCHAR(20)    NOT NULL UNIQUE,
+    estado                   VARCHAR(30)    NOT NULL DEFAULT 'activo'
+                             CHECK (estado IN ('activo', 'inactivo', 'bloqueado')),
+    saldo                    NUMERIC(19, 2) NOT NULL DEFAULT 0,
+    motivo                   VARCHAR(200),
+    operaciones_suspendidas  BOOLEAN        NOT NULL DEFAULT FALSE,
+    fecha_vinculacion        TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    fecha_actualizacion      TIMESTAMPTZ
 );
 
 -- Si la tabla ya existe, ejecutar solo esta sentencia:

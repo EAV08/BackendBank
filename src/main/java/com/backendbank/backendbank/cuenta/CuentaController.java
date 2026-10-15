@@ -1,7 +1,10 @@
 package com.backendbank.backendbank.cuenta;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,6 +35,11 @@ public class CuentaController {
     @PostMapping("/saldo")
     public ResponseEntity<SaldoDisponibleResponse> consultar(@Valid @RequestBody ConsultarSaldoRequest request) {
         return ResponseEntity.ok(cuentaService.consultar(request));
+    }
+
+    @PostMapping("/bloqueo")
+    public ResponseEntity<CuentaBloqueadaResponse> bloquear(@Valid @RequestBody BloquearCuentaRequest request) {
+        return ResponseEntity.ok(cuentaService.bloquear(request));
     }
 }
 
@@ -70,6 +78,34 @@ record SaldoDisponibleResponse(
 ) {
 }
 
+record BloquearCuentaRequest(
+        @NotNull(message = "El id cliente debe completarse")
+        UUID idCliente,
+
+        @NotNull(message = "El id cuenta debe completarse")
+        UUID idCuenta,
+
+        @NotBlank(message = "El motivo debe completarse")
+        @Size(max = 200, message = "El motivo debe corregirse")
+        @Pattern(regexp = "(?i)(pérdida|perdida|fraude)", message = "El motivo debe corregirse")
+        String motivo
+) {
+    BloquearCuentaRequest {
+        motivo = motivo == null ? null : motivo.trim();
+    }
+}
+
+record CuentaBloqueadaResponse(
+        UUID idCuenta,
+        String numeroCuenta,
+        UUID idCliente,
+        String estado,
+        boolean operacionesSuspendidas,
+        String motivo,
+        String mensaje
+) {
+}
+
 record MensajeError(String mensaje) {
 }
 
@@ -99,5 +135,10 @@ class CuentaExceptionHandler {
     @ExceptionHandler(CuentaNoEncontradaException.class)
     ResponseEntity<MensajeError> cuentaNoEncontrada(CuentaNoEncontradaException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(BloqueoCuentaRechazadoException.class)
+    ResponseEntity<MensajeError> bloqueoRechazado(BloqueoCuentaRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 }

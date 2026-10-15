@@ -34,8 +34,17 @@ public class Cuenta {
     @Column(name = "saldo", nullable = false, precision = 19, scale = 2)
     private BigDecimal saldo;
 
+    @Column(name = "motivo", length = 200)
+    private String motivo;
+
+    @Column(name = "operaciones_suspendidas", nullable = false)
+    private boolean operacionesSuspendidas;
+
     @Column(name = "fecha_vinculacion", nullable = false, updatable = false)
     private OffsetDateTime fechaVinculacion;
+
+    @Column(name = "fecha_actualizacion")
+    private OffsetDateTime fechaActualizacion;
 
     @PrePersist
     void asignarValoresIniciales() {
@@ -93,7 +102,31 @@ public class Cuenta {
         this.saldo = saldo;
     }
 
+    public String getMotivo() {
+        return motivo;
+    }
+
+    public void setMotivo(String motivo) {
+        this.motivo = motivo;
+    }
+
+    public boolean isOperacionesSuspendidas() {
+        return operacionesSuspendidas;
+    }
+
+    public void setOperacionesSuspendidas(boolean operacionesSuspendidas) {
+        this.operacionesSuspendidas = operacionesSuspendidas;
+    }
+
     public OffsetDateTime getFechaVinculacion() {
         return fechaVinculacion;
+    }
+
+    public OffsetDateTime getFechaActualizacion() {
+        return fechaActualizacion;
+    }
+
+    public void setFechaActualizacion(OffsetDateTime fechaActualizacion) {
+        this.fechaActualizacion = fechaActualizacion;
     }
 }
