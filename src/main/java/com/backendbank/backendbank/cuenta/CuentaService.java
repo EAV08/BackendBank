@@ -5,6 +5,7 @@ import com.backendbank.backendbank.cliente.ClienteNoEncontradoException;
 import com.backendbank.backendbank.cliente.ClienteRepository;
 import com.backendbank.backendbank.cliente.ClienteService;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,21 +35,30 @@ public class CuentaService {
     static final String MENSAJE_YA_BLOQUEADA = "la cuenta ya se encuentra en estado de bloqueo";
     static final String MOTIVO_PERDIDA = "pérdida";
     static final String MOTIVO_FRAUDE = "fraude";
+    static final String MENSAJE_ESTADO = "consulta exitosa";
+    static final String MENSAJE_CLIENTE_NO_EXISTE = "no existe un cliente con ese usuario";
+    static final String MENSAJE_CONTRASENA = "la contraseña es incorrecta";
+    static final String MENSAJE_CUENTA_NO_EXISTE = "no existe una cuenta con ese número";
 
     private final CuentaRepository cuentaRepository;
     private final ClienteRepository clienteRepository;
     private final GeneradorNumeroCuenta generadorNumeroCuenta;
     private final ConsultaSaldo consultaSaldo;
+    private final PasswordEncoder passwordEncoder;
+    private final String hashFicticio;
 
     public CuentaService(
             CuentaRepository cuentaRepository,
             ClienteRepository clienteRepository,
             GeneradorNumeroCuenta generadorNumeroCuenta,
-            ConsultaSaldo consultaSaldo) {
+            ConsultaSaldo consultaSaldo,
+            PasswordEncoder passwordEncoder) {
         this.cuentaRepository = cuentaRepository;
         this.clienteRepository = clienteRepository;
         this.generadorNumeroCuenta = generadorNumeroCuenta;
         this.consultaSaldo = consultaSaldo;
+        this.passwordEncoder = passwordEncoder;
+        this.hashFicticio = passwordEncoder.encode("contrasena-ficticia");
     }
 
     @Transactional(noRollbackFor = {
@@ -140,6 +150,28 @@ public class CuentaService {
         return respuestaBloqueo(cuentaRepository.saveAndFlush(cuenta), MENSAJE_BLOQUEO);
     }
 
+    @Transactional(readOnly = true, noRollbackFor = {
+            ClienteNoRegistradoException.class,
+            ContrasenaIncorrectaException.class,
+            CuentaNoEncontradaException.class
+    })
+    public EstadoCuentaResponse consultarEstado(ConsultarEstadoRequest request) {
+        Cliente cliente = clienteRepository.findByUsuario(request.usuario()).orElse(null);
+        if (cliente == null) {
+            passwordEncoder.matches(request.contrasena(), hashFicticio);
+            throw new ClienteNoRegistradoException(MENSAJE_CLIENTE_NO_EXISTE);
+        }
+        if (!contrasenaCoincide(cliente, request.contrasena())) {
+            throw new ContrasenaIncorrectaException(MENSAJE_CONTRASENA);
+        }
+
+        Cuenta cuenta = cuentaRepository.findByNumeroCuenta(request.numeroCuenta()).orElse(null);
+        if (cuenta == null || !cliente.getIdCliente().equals(cuenta.getIdCliente())) {
+            throw new CuentaNoEncontradaException(MENSAJE_CUENTA_NO_EXISTE);
+        }
+        return new EstadoCuentaResponse(cuenta.getNumeroCuenta(), cuenta.getEstado(), MENSAJE_ESTADO);
+    }
+
     private void exigirPerfilHabilitado(Cliente cliente) {
         if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
             throw new CreacionCuentaRechazadaException(MENSAJE_PERFIL_BLOQUEADO);
@@ -212,6 +244,14 @@ public class CuentaService {
         }
     }
 
+    private boolean contrasenaCoincide(Cliente cliente, String plana) {
+        String almacenada = cliente.getContrasena();
+        if (almacenada != null && (almacenada.startsWith("$2a$") || almacenada.startsWith("$2b$") || almacenada.startsWith("$2y$"))) {
+            return passwordEncoder.matches(plana, almacenada);
+        }
+        return plana.equals(almacenada);
+    }
+
     private String normalizarMotivo(String motivo) {
         if (MOTIVO_FRAUDE.equalsIgnoreCase(motivo)) {
             return MOTIVO_FRAUDE;
@@ -269,6 +309,20 @@ class CuentaNoEncontradaException extends RuntimeException {
 class BloqueoCuentaRechazadoException extends RuntimeException {
 
     BloqueoCuentaRechazadoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class ClienteNoRegistradoException extends RuntimeException {
+
+    ClienteNoRegistradoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class ContrasenaIncorrectaException extends RuntimeException {
+
+    ContrasenaIncorrectaException(String mensaje) {
         super(mensaje);
     }
 }

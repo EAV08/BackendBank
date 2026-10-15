@@ -12,4 +12,6 @@ public interface CuentaRepository extends JpaRepository<Cuenta, UUID> {
     boolean existsByNumeroCuenta(String numeroCuenta);
 
     Optional<Cuenta> findByIdCuentaAndIdCliente(UUID idCuenta, UUID idCliente);
+
+    Optional<Cuenta> findByNumeroCuenta(String numeroCuenta);
 }

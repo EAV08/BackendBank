@@ -41,6 +41,11 @@ public class CuentaController {
     public ResponseEntity<CuentaBloqueadaResponse> bloquear(@Valid @RequestBody BloquearCuentaRequest request) {
         return ResponseEntity.ok(cuentaService.bloquear(request));
     }
+
+    @PostMapping("/estado")
+    public ResponseEntity<EstadoCuentaResponse> consultarEstado(@Valid @RequestBody ConsultarEstadoRequest request) {
+        return ResponseEntity.ok(cuentaService.consultarEstado(request));
+    }
 }
 
 record CrearCuentaRequest(
@@ -106,6 +111,33 @@ record CuentaBloqueadaResponse(
 ) {
 }
 
+record ConsultarEstadoRequest(
+        @NotBlank(message = "El usuario debe completarse")
+        @Size(max = 80, message = "El usuario debe corregirse")
+        String usuario,
+
+        @NotBlank(message = "La contraseña debe completarse")
+        @Size(max = 255, message = "La contraseña debe corregirse")
+        String contrasena,
+
+        @NotBlank(message = "El número de cuenta debe completarse")
+        @Size(max = 20, message = "El número de cuenta debe corregirse")
+        String numeroCuenta
+) {
+    ConsultarEstadoRequest {
+        usuario = recortar(usuario);
+        contrasena = recortar(contrasena);
+        numeroCuenta = recortar(numeroCuenta);
+    }
+
+    private static String recortar(String valor) {
+        return valor == null ? null : valor.trim();
+    }
+}
+
+record EstadoCuentaResponse(String numeroCuenta, String estado, String mensaje) {
+}
+
 record MensajeError(String mensaje) {
 }
 
@@ -140,5 +172,15 @@ class CuentaExceptionHandler {
     @ExceptionHandler(BloqueoCuentaRechazadoException.class)
     ResponseEntity<MensajeError> bloqueoRechazado(BloqueoCuentaRechazadoException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ClienteNoRegistradoException.class)
+    ResponseEntity<MensajeError> clienteNoRegistrado(ClienteNoRegistradoException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(ContrasenaIncorrectaException.class)
+    ResponseEntity<MensajeError> contrasenaIncorrecta(ContrasenaIncorrectaException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
     }
 }
