@@ -1,11 +1,13 @@
 package com.backendbank.backendbank.cliente;
 
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -32,6 +36,12 @@ class RegistroClienteTest {
 
     @Autowired
     private ClienteRepository clienteRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private TokenService tokenService;
 
     @Test
     void registraClienteConDatosCompletos() throws Exception {
@@ -51,7 +61,9 @@ class RegistroClienteTest {
         assertEquals("900123456", guardado.getNitDocumento());
         assertEquals("contacto@elsol.com", guardado.getEmail());
         assertEquals("contacto", guardado.getUsuario());
-        assertEquals("clave123", guardado.getContrasena());
+        assertNotEquals("clave123", guardado.getContrasena());
+        assertTrue(guardado.getContrasena().startsWith("$2a$"));
+        assertTrue(passwordEncoder.matches("clave123", guardado.getContrasena()));
         assertEquals("3001234567", guardado.getTelefono());
         assertEquals(Cliente.ROL_CLIENTE, guardado.getRol());
         assertNotNull(guardado.getFechaRegistro());
@@ -65,6 +77,9 @@ class RegistroClienteTest {
                 .andReturn();
 
         assertNotEquals(idCliente, idDe(segundo));
+        Cliente segundoGuardado = clienteRepository.findById(idDe(segundo)).orElseThrow();
+        assertNotEquals(guardado.getContrasena(), segundoGuardado.getContrasena());
+        assertTrue(passwordEncoder.matches("clave123", segundoGuardado.getContrasena()));
         assertEquals(2, clienteRepository.count());
     }
 
@@ -507,11 +522,99 @@ class RegistroClienteTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
                 .andExpect(jsonPath("$.estado").value("activo"))
-                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"));
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"))
+                .andExpect(jsonPath("$.token").isNotEmpty());
 
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("contacto", despues.getUsuario());
         assertEquals("activo", despues.getEstado());
+        assertEquals(0, despues.getIntentosFallidos());
+    }
+
+    @Test
+    void entregaUnTokenDeSesionAlIngresar() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        MvcResult resultado = mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String token = JsonPath.read(resultado.getResponse().getContentAsString(), "$.token");
+        TokenService.SesionToken sesion = tokenService.validar(token);
+        assertEquals(clienteId, sesion.idCliente());
+        assertEquals("contacto", sesion.usuario());
+        assertEquals(Cliente.ROL_CLIENTE, sesion.rol());
+
+        String alterado = token.substring(0, token.lastIndexOf('.') + 1) + "firma-invalida";
+        assertThrows(TokenService.TokenInvalidoException.class, () -> tokenService.validar(alterado));
+    }
+
+    @Test
+    void bloqueaAlTercerIntentoFallidoYNoEntregaToken() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        for (int intento = 1; intento < ClienteService.MAX_INTENTOS_FALLIDOS; intento++) {
+            mockMvc.perform(post("/clientes/ingreso")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(ingresoJson("contacto", "clave-incorrecta")))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.mensaje").value("el usuario o la contraseña son inválidos"));
+
+            Cliente parcial = clienteRepository.findById(clienteId).orElseThrow();
+            assertEquals("activo", parcial.getEstado());
+            assertEquals(intento, parcial.getIntentosFallidos());
+        }
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave-incorrecta")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"));
+
+        Cliente bloqueado = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("bloqueado", bloqueado.getEstado());
+        assertEquals(ClienteService.MAX_INTENTOS_FALLIDOS, bloqueado.getIntentosFallidos());
+        assertEquals(ClienteService.MOTIVO_BLOQUEO, bloqueado.getMotivo());
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"));
+
+        assertEquals("bloqueado", clienteRepository.findById(clienteId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void reiniciaLosIntentosCuandoLaContrasenaVuelveACoincidir() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave-incorrecta")))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave-incorrecta")))
+                .andExpect(status().isUnauthorized());
+
+        assertEquals(2, clienteRepository.findById(clienteId).orElseThrow().getIntentosFallidos());
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"));
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("activo", despues.getEstado());
+        assertEquals(0, despues.getIntentosFallidos());
     }
 
     @Test

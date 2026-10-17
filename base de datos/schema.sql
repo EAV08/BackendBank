@@ -14,8 +14,25 @@ CREATE TABLE clientes (
                          CHECK (rol IN ('CLIENTE', 'ADMINISTRADOR')),
     actualizado_por     UUID,
     fecha_actualizacion TIMESTAMPTZ,
-    motivo              VARCHAR(200)
+    motivo              VARCHAR(200),
+    intentos_fallidos   INTEGER      NOT NULL DEFAULT 0
 );
+
+CREATE TABLE cuentas (
+    id_cuenta                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_cliente               UUID           NOT NULL REFERENCES clientes (id_cliente),
+    numero_cuenta            VARCHAR(20)    NOT NULL UNIQUE,
+    estado                   VARCHAR(30)    NOT NULL DEFAULT 'activo'
+                             CHECK (estado IN ('activo', 'inactivo', 'bloqueado')),
+    saldo                    NUMERIC(19, 2) NOT NULL DEFAULT 0,
+    motivo                   VARCHAR(200),
+    operaciones_suspendidas  BOOLEAN        NOT NULL DEFAULT FALSE,
+    fecha_vinculacion        TIMESTAMPTZ    NOT NULL DEFAULT now(),
+    fecha_actualizacion      TIMESTAMPTZ
+);
+
+-- Si la tabla ya existe, ejecutar solo esta sentencia:
+-- ALTER TABLE clientes ADD COLUMN IF NOT EXISTS intentos_fallidos INTEGER NOT NULL DEFAULT 0;
 
 UPDATE clientes
 SET rol = 'ADMINISTRADOR',
@@ -25,4 +42,5 @@ WHERE usuario = 'admin';
 
 Select * from clientes;
 
-Drop table clientes;
+DROP TABLE cuentas;
+DROP TABLE clientes;
