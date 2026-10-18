@@ -22,7 +22,7 @@ public class TokenService {
     private final long expiracionSegundos;
 
     public TokenService(
-            @Value("${seguridad.jwt.secreto:backendbank-secreto-local-de-desarrollo-32b}") String secreto,
+            @Value("${seguridad.jwt.secreto}") String secreto,
             @Value("${seguridad.jwt.expiracion-minutos:60}") long expiracionMinutos) {
         byte[] bytes = secreto.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {

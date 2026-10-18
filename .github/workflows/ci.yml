@@ -61,43 +61,17 @@ jobs:
             target/surefire-reports
             target/site/jacoco
 
-sonarcloud:
-  name: SonarCloud analysis
-  needs: unit-tests
-  runs-on: ubuntu-latest
-  steps:
-    # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
-    # detectar el código nuevo y atribuir las líneas.
-    - name: Descargar el código
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Instalar Java 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: "17"
-        cache: maven
-
-    - name: Permiso de ejecución del wrapper
-      run: chmod +x mvnw
-
-    # Este job corre en otra máquina, así que vuelve a generar el reporte de
-    # JaCoCo con verify antes de que el scanner lo lea. La clave, la
-    # organización y la URL están en el pom.
-    - name: Analizar con SonarCloud
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
-
-  build:
-    name: Build
-    needs: sonarcloud
+  sonarcloud:
+    name: SonarCloud analysis
+    needs: test
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
+      # detectar el código nuevo y atribuir las líneas.
       - name: Descargar el código
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Instalar Java 17
         uses: actions/setup-java@v4
@@ -109,13 +83,39 @@ sonarcloud:
       - name: Permiso de ejecución del wrapper
         run: chmod +x mvnw
 
-      # Las pruebas ya corrieron en la primera etapa.
-      - name: Empaquetar la aplicación
-        run: ./mvnw -B -DskipTests package
+      # Este job corre en otra máquina, así que vuelve a generar el reporte de
+      # JaCoCo con verify antes de que el scanner lo lea. La clave, la
+      # organización y la URL están en el pom.
+      - name: Analizar con SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
 
-      - name: Guardar el .jar generado
-        uses: actions/upload-artifact@v4
-        with:
-          name: backendbank-jar
-          if-no-files-found: error
-          path: target/*.jar
+    build:
+      name: Build
+      needs: sonarcloud
+      runs-on: ubuntu-latest
+      steps:
+        - name: Descargar el código
+          uses: actions/checkout@v4
+
+        - name: Instalar Java 17
+          uses: actions/setup-java@v4
+          with:
+            distribution: temurin
+            java-version: "17"
+            cache: maven
+
+        - name: Permiso de ejecución del wrapper
+          run: chmod +x mvnw
+
+        # Las pruebas ya corrieron en la primera etapa.
+        - name: Empaquetar la aplicación
+          run: ./mvnw -B -DskipTests package
+
+        - name: Guardar el .jar generado
+          uses: actions/upload-artifact@v4
+          with:
+            name: backendbank-jar
+            if-no-files-found: error
+            path: target/*.jar
