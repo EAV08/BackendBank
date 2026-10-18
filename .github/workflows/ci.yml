@@ -63,7 +63,7 @@ jobs:
 
   sonarcloud:
     name: SonarCloud analysis
-    needs: test
+    needs: unit-tests
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
