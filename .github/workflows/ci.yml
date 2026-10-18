@@ -38,15 +38,6 @@ jobs:
       - name: Permiso de ejecución del wrapper
         run: chmod +x mvnw
 
-      # -B evita prompts. verify incluye test, así que JaCoCo escribe
-      # target/site/jacoco/jacoco.xml antes de que el scanner lo lea.
-      # SONAR_TOKEN autentica contra SonarCloud. La clave, la organización
-      # y la URL están en el pom.
-      - name: Compilar, probar y analizar con SonarCloud
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
-
       # if: always() sube los reportes también cuando alguna prueba falla,
       # para que Calidad pueda descargarlos desde la pestaña Actions.
       # if-no-files-found: warn evita que este paso tumbe el job si JaCoCo
@@ -60,6 +51,11 @@ jobs:
           path: |
             target/surefire-reports
             target/site/jacoco
+
+      # -B evita prompts. verify incluye test, así que JaCoCo escribe
+      # target/site/jacoco/jacoco.xml antes de que el scanner lo lea.
+      # SONAR_TOKEN autentica contra SonarCloud. La clave, la organización
+      # y la URL están en el pom.
 
   sonarcloud:
     name: SonarCloud analysis
