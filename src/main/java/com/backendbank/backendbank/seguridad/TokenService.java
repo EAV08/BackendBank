@@ -76,7 +76,6 @@ public class TokenService {
     }
 
     public static class TokenInvalidoException extends RuntimeException {
-
         public TokenInvalidoException(String mensaje) {
             super(mensaje);
         }
