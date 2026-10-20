@@ -1,4 +1,3 @@
-# BackendBank
 
 # EAV08-2026-2
 
@@ -101,3 +100,9 @@ erDiagram
 # Criterio 4- Modelo Fisico
 
 Ver [`schema.sql`](./schema.sql)
+
+
+
+
+
+
