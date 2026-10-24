@@ -142,6 +142,114 @@ class RegistroClienteTest {
     }
 
     @Test
+    void rechazaDocumentoCuandoDocumentoEmailYUsuarioYaExisten() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Otra Tienda", "Otra S.A.S.", "900123456", "contacto@elsol.com", "3010000000")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaDocumentoCuandoDocumentoYEmailYaExistenYElUsuarioEsNuevo() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Otra Tienda",
+                                "Otra S.A.S.",
+                                "900123456",
+                                "contacto@elsol.com",
+                                "3010000000",
+                                "usuarioNuevo",
+                                "otraClave")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaDocumentoCuandoDocumentoYUsuarioYaExistenYElEmailEsNuevo() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Otra Tienda",
+                                "Otra S.A.S.",
+                                "900123456",
+                                "nuevo@elsol.com",
+                                "3010000000",
+                                "contacto",
+                                "otraClave")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaEmailCuandoEmailYUsuarioYaExistenYElDocumentoEsNuevo() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Otra Tienda",
+                                "Otra S.A.S.",
+                                "800999111",
+                                "contacto@elsol.com",
+                                "3010000000",
+                                "contacto",
+                                "otraClave")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese email"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaCuandoElEmailYaExisteYElDocumentoYElUsuarioSonNuevos() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Otra Tienda",
+                                "Otra S.A.S.",
+                                "800999111",
+                                "contacto@elsol.com",
+                                "3010000000",
+                                "usuarioNuevo",
+                                "otraClave")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese email"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
     void actualizaDatosCuandoElActorEsAdministrador() throws Exception {
         UUID adminId = registrarAdministrador();
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
@@ -194,6 +302,29 @@ class RegistroClienteTest {
                 .andExpect(jsonPath("$.mensaje").value("el cliente no fue encontrado"));
 
         assertEquals(antes, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaActualizacionCuandoElClienteNoExisteAunqueElEmailPertenezcaAOtro() throws Exception {
+        UUID adminId = registrarAdministrador();
+        registrar("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", "3010000000");
+        long antes = clienteRepository.count();
+
+        mockMvc.perform(put("/clientes/" + UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(actualizacionJson(
+                                "Tienda El Sol Actualizada",
+                                "El Sol Actualizada S.A.S.",
+                                "otro@elsol.com",
+                                "3110000000",
+                                adminId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value("el cliente no fue encontrado"));
+
+        assertEquals(antes, clienteRepository.count());
+        assertEquals(1, clienteRepository.findAll().stream()
+                .filter(cliente -> "otro@elsol.com".equals(cliente.getEmail()))
+                .count());
     }
 
     @Test
