@@ -1,5 +1,8 @@
 package com.backendbank.backendbank.cuenta;
 
+import com.backendbank.backendbank.cliente.Cliente;
+import com.backendbank.backendbank.cliente.ClienteRepository;
+import com.backendbank.backendbank.cliente.ClienteService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +34,9 @@ class BloquearCuentaTest {
 
     @Autowired
     private CuentaRepository cuentaRepository;
+
+    @Autowired
+    private ClienteRepository clienteRepository;
 
     @Test
     void bloqueaLaCuentaActivaYSuspendeLasOperaciones() throws Exception {
@@ -107,6 +113,123 @@ class BloquearCuentaTest {
         Cuenta despues = cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow();
         assertEquals(Cuenta.ESTADO_ACTIVO, despues.getEstado());
         assertFalse(despues.isOperacionesSuspendidas());
+    }
+
+    @Test
+    void rechazaCuandoElClienteNoExiste() throws Exception {
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(
+                                UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "fraude")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_NO_ENCONTRADO));
+
+        assertEquals(0, cuentaRepository.count());
+    }
+
+    @Test
+    void noBloqueaCuandoElPerfilEstaBloqueado() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_BLOQUEADO);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000005", Cuenta.ESTADO_ACTIVO, null, false, null);
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "fraude")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_PERFIL_BLOQUEADO));
+
+        Cuenta despues = cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow();
+        assertEquals(Cuenta.ESTADO_ACTIVO, despues.getEstado());
+        assertFalse(despues.isOperacionesSuspendidas());
+    }
+
+    @Test
+    void noBloqueaCuandoElPerfilEstaInactivo() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_INACTIVO);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000006", Cuenta.ESTADO_ACTIVO, null, false, null);
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "fraude")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_INACTIVO));
+
+        assertEquals(Cuenta.ESTADO_ACTIVO, cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow().getEstado());
+    }
+
+    @Test
+    void noBloqueaCuandoElPerfilNoEstaValidado() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000007", Cuenta.ESTADO_ACTIVO, null, false, null);
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "pérdida")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_SIN_VALIDACION));
+
+        assertEquals(Cuenta.ESTADO_ACTIVO, cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow().getEstado());
+    }
+
+    @Test
+    void noBloqueaCuandoLaCuentaNoExiste() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(
+                                clienteId,
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                                "fraude")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CUENTA_NO_ENCONTRADA));
+
+        assertEquals(0, cuentaRepository.count());
+    }
+
+    @Test
+    void guardaElMotivoPerdidaSinAcentoComoPerdida() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000008", Cuenta.ESTADO_ACTIVO, null, false, null);
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "perdida")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("bloqueado"))
+                .andExpect(jsonPath("$.operacionesSuspendidas").value(true))
+                .andExpect(jsonPath("$.motivo").value("pérdida"))
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_BLOQUEO));
+
+        assertEquals(CuentaService.MOTIVO_PERDIDA, cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow().getMotivo());
+    }
+
+    @Test
+    void rechazaCuandoElMotivoNoEsPerdidaNiFraude() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000009", Cuenta.ESTADO_ACTIVO, null, false, null);
+
+        mockMvc.perform(post("/cuentas/bloqueo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "robo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Debe corregir los siguientes datos: motivo"));
+
+        Cuenta despues = cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow();
+        assertEquals(Cuenta.ESTADO_ACTIVO, despues.getEstado());
+        assertFalse(despues.isOperacionesSuspendidas());
+        assertNull(despues.getMotivo());
+    }
+
+    private void fijarEstado(UUID idCliente, String estado) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElseThrow();
+        cliente.setEstado(estado);
+        clienteRepository.saveAndFlush(cliente);
     }
 
     private String bloqueoJson(UUID idCliente, UUID idCuenta, String motivo) {

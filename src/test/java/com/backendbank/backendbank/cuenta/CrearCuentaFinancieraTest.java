@@ -2,6 +2,7 @@ package com.backendbank.backendbank.cuenta;
 
 import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteRepository;
+import com.backendbank.backendbank.cliente.ClienteService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,6 +121,47 @@ class CrearCuentaFinancieraTest {
         solicitar(clienteId)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.mensaje").value("su usuario está inactivo y debe contactar al banco"));
+
+        assertEquals(0, cuentaRepository.count());
+    }
+
+    @Test
+    void rechazaCuandoElClienteNoExiste() throws Exception {
+        solicitar(UUID.fromString("00000000-0000-0000-0000-000000000000"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_NO_ENCONTRADO));
+
+        assertEquals(0, cuentaRepository.count());
+    }
+
+    @Test
+    void creaCuandoLasCuentasAnterioresNoEstanActivas() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        for (int indice = 0; indice < CuentaService.MAX_CUENTAS_ACTIVAS; indice++) {
+            Cuenta cuenta = new Cuenta();
+            cuenta.setIdCliente(clienteId);
+            cuenta.setNumeroCuenta("200000000" + indice);
+            cuenta.setEstado(Cuenta.ESTADO_BLOQUEADO);
+            cuenta.setSaldo(BigDecimal.ZERO.setScale(2));
+            cuentaRepository.saveAndFlush(cuenta);
+        }
+
+        solicitar(clienteId)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.saldo").value(0))
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_EXITO));
+
+        assertEquals(1, cuentaRepository.countByIdClienteAndEstado(clienteId, Cuenta.ESTADO_ACTIVO));
+    }
+
+    @Test
+    void rechazaCuandoFaltaElIdCliente() throws Exception {
+        mockMvc.perform(post("/cuentas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: id cliente"));
 
         assertEquals(0, cuentaRepository.count());
     }
