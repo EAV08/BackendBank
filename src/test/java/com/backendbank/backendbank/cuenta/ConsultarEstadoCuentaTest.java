@@ -108,6 +108,34 @@ class ConsultarEstadoCuentaTest {
                 .andExpect(jsonPath("$.estado").doesNotExist());
     }
 
+    @Test
+    void muestraElEstadoCuandoLaCuentaEstaInactiva() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        guardarCuenta(clienteId, "1000000003", Cuenta.ESTADO_INACTIVO);
+
+        mockMvc.perform(post("/cuentas/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson("contacto", "clave123", "1000000003")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeroCuenta").value("1000000003"))
+                .andExpect(jsonPath("$.estado").value("inactivo"))
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_ESTADO));
+    }
+
+    @Test
+    void rechazaLaContrasenaAunqueElNumeroDeCuentaNoExista() throws Exception {
+        registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+
+        mockMvc.perform(post("/cuentas/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson("contacto", "clave-incorrecta", "9999999999")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CONTRASENA))
+                .andExpect(jsonPath("$.estado").doesNotExist());
+
+        assertEquals(0, clienteRepository.findByUsuario("contacto").orElseThrow().getIntentosFallidos());
+    }
+
     private String consultaJson(String usuario, String contrasena, String numeroCuenta) {
         return """
                 {

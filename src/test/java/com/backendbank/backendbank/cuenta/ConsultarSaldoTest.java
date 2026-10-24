@@ -1,6 +1,8 @@
 package com.backendbank.backendbank.cuenta;
 
+import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteRepository;
+import com.backendbank.backendbank.cliente.ClienteService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,6 +92,81 @@ class ConsultarSaldoTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CUENTA_NO_ENCONTRADA))
                 .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    @Test
+    void rechazaCuandoElClienteNoExiste() throws Exception {
+        mockMvc.perform(post("/cuentas/saldo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson(
+                                UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                                UUID.fromString("00000000-0000-0000-0000-000000000001"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_NO_ENCONTRADO))
+                .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    @Test
+    void noMuestraElSaldoCuandoElPerfilEstaBloqueadoAunqueElIdDeCuentaNoExista() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_BLOQUEADO);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000005", Cuenta.ESTADO_ACTIVO, new BigDecimal("80.00"));
+
+        mockMvc.perform(post("/cuentas/saldo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson(clienteId, UUID.fromString("00000000-0000-0000-0000-000000000001"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_PERFIL_BLOQUEADO))
+                .andExpect(jsonPath("$.saldo").doesNotExist());
+
+        assertEquals(0, new BigDecimal("80.00").compareTo(
+                cuentaRepository.findById(cuenta.getIdCuenta()).orElseThrow().getSaldo()));
+    }
+
+    @Test
+    void noMuestraElSaldoCuandoElPerfilEstaInactivo() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_INACTIVO);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000006", Cuenta.ESTADO_ACTIVO, new BigDecimal("15.00"));
+
+        mockMvc.perform(post("/cuentas/saldo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson(clienteId, cuenta.getIdCuenta())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_INACTIVO))
+                .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    @Test
+    void noMuestraElSaldoCuandoElPerfilNoEstaValidado() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
+        Cuenta cuenta = guardarCuenta(clienteId, "1000000007", Cuenta.ESTADO_ACTIVO, new BigDecimal("15.00"));
+
+        mockMvc.perform(post("/cuentas/saldo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson(clienteId, cuenta.getIdCuenta())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_SIN_VALIDACION))
+                .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    @Test
+    void noMuestraElSaldoCuandoLaCuentaNoExiste() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+
+        mockMvc.perform(post("/cuentas/saldo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson(clienteId, UUID.fromString("00000000-0000-0000-0000-000000000001"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CUENTA_NO_ENCONTRADA))
+                .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    private void fijarEstado(UUID idCliente, String estado) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElseThrow();
+        cliente.setEstado(estado);
+        clienteRepository.saveAndFlush(cliente);
     }
 
     private String consultaJson(UUID idCliente, UUID idCuenta) {
