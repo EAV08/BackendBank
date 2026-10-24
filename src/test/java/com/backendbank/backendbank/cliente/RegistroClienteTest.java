@@ -126,6 +126,83 @@ class RegistroClienteTest {
     }
 
     @Test
+    void elEmailYElUsuarioRechazadosSiguenDisponibles() throws Exception {
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Tienda El Sol",
+                                "El Sol S.A.S.",
+                                "900555001",
+                                "base@matriz.com",
+                                "3001234567",
+                                "usrbase",
+                                "clave123")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Tienda Matriz",
+                                "Matriz S.A.S.",
+                                "900555001",
+                                "nuevo4@matriz.com",
+                                "3001234567",
+                                "usrnuevo4",
+                                "clave123")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        MvcResult creado = mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(clienteJson(
+                                "Tienda Matriz",
+                                "Matriz S.A.S.",
+                                "900555009",
+                                "nuevo4@matriz.com",
+                                "3001234567",
+                                "usrnuevo4",
+                                "clave123")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.mensaje").value("registro exitoso"))
+                .andReturn();
+
+        Cliente guardado = clienteRepository.findById(idDe(creado)).orElseThrow();
+        assertEquals("900555009", guardado.getNitDocumento());
+        assertEquals("nuevo4@matriz.com", guardado.getEmail());
+        assertEquals("usrnuevo4", guardado.getUsuario());
+        assertEquals(2, clienteRepository.count());
+    }
+
+    @Test
+    void rechazaElMismoRegistroCuandoYaQuedoPersistido() throws Exception {
+        String cuerpo = clienteJson(
+                "Tienda El Sol",
+                "El Sol S.A.S.",
+                "900555008",
+                "nuevo8@matriz.com",
+                "3001234567",
+                "usrnuevo8",
+                "clave123");
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.mensaje").value("registro exitoso"))
+                .andExpect(jsonPath("$.idCliente").isNotEmpty());
+
+        mockMvc.perform(post("/clientes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensaje").value("ya existe un cliente registrado con ese documento"));
+
+        assertEquals(1, clienteRepository.count());
+    }
+
+    @Test
     void rechazaCuandoElUsuarioYaExiste() throws Exception {
         mockMvc.perform(post("/clientes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -586,6 +663,24 @@ class RegistroClienteTest {
     }
 
     @Test
+    void rechazaCambioDeEstadoCuandoElAdministradorEstaInactivo() throws Exception {
+        UUID adminId = registrarAdministrador();
+        fijarEstado(adminId, Cliente.ESTADO_INACTIVO);
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(estadoJson("inactivo", "El cliente solicito el cierre", adminId)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
+
+        Cliente sinCambios = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("activo", sinCambios.getEstado());
+        assertNull(sinCambios.getMotivo());
+    }
+
+    @Test
     void rechazaInactivarCuandoElEstadoActualNoLoPermite() throws Exception {
         UUID adminId = registrarAdministrador();
         UUID pendienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
@@ -622,6 +717,23 @@ class RegistroClienteTest {
                 .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: motivo"))
                 .andExpect(jsonPath("$.errores[0].campo").value("motivo"))
                 .andExpect(jsonPath("$.errores[0].mensaje").value("El motivo debe completarse"));
+
+        assertEquals("activo", clienteRepository.findById(clienteId).orElseThrow().getEstado());
+    }
+
+    @Test
+    void rechazaCambioDeEstadoCuandoFaltanEstadoYMotivo() throws Exception {
+        UUID adminId = registrarAdministrador();
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(estadoJson("", "", adminId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: estado, motivo"))
+                .andExpect(jsonPath("$.errores[?(@.campo == 'estado')].mensaje").value("El estado debe completarse"))
+                .andExpect(jsonPath("$.errores[?(@.campo == 'motivo')].mensaje").value("El motivo debe completarse"));
 
         assertEquals("activo", clienteRepository.findById(clienteId).orElseThrow().getEstado());
     }
@@ -794,6 +906,42 @@ class RegistroClienteTest {
     }
 
     @Test
+    void ingresaDespuesDeQueElAdministradorLoReactiva() throws Exception {
+        UUID adminId = registrarAdministrador();
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_INACTIVO);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está inactivo y debe contactar al banco"));
+
+        mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(estadoJson("activo", "Reactivación autorizada", adminId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.mensaje").value("el cambio se realizó exitosamente"));
+
+        Cliente reactivado = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("activo", reactivado.getEstado());
+        assertEquals("Reactivación autorizada", reactivado.getMotivo());
+        assertEquals(adminId, reactivado.getActualizadoPor());
+        assertNotNull(reactivado.getFechaActualizacion());
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"))
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.contrasena").doesNotExist());
+    }
+
+    @Test
     void rechazaIngresoCuandoElUsuarioCoincidePeroEstaBloqueado() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_BLOQUEADO);
@@ -823,6 +971,64 @@ class RegistroClienteTest {
         Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
         assertEquals("pendiente_de_validacion", despues.getEstado());
         assertEquals("contacto", despues.getUsuario());
+    }
+
+    @Test
+    void rechazaCon423DuranteElBloqueoDeQuinceMinutos() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
+
+        for (int intento = 1; intento <= 3; intento++) {
+            mockMvc.perform(post("/clientes/ingreso")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(ingresoJson("contacto", "clave1234")));
+        }
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().is(423))
+                .andExpect(jsonPath("$.mensaje").value(
+                        "Su cuenta está bloqueada temporalmente. Inténtelo nuevamente en 15 minutos o contacte al banco."))
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+        Thread.sleep(15 * 60 * 1000L);
+
+        mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"))
+                .andExpect(jsonPath("$.token").isNotEmpty());
+
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("activo", despues.getEstado());
+        assertEquals(0, despues.getIntentosFallidos());
+    }
+
+    @Test
+    void ingresaDespuesDeValidarAlClientePendiente() throws Exception {
+        UUID adminId = registrarAdministrador();
+        UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
+        fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
+
+        mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(estadoJson("activo", "Validación completada", adminId)));
+
+        MvcResult resultado = mockMvc.perform(post("/clientes/ingreso")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(ingresoJson("contacto", "clave123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mensaje").value("ingreso exitoso"))
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn();
+
+        String token = JsonPath.read(resultado.getResponse().getContentAsString(), "$.token");
+        TokenService.SesionToken sesion = tokenService.validar(token);
+        assertEquals(clienteId, sesion.idCliente());
+        assertEquals(Cliente.ROL_CLIENTE, sesion.rol());
+        assertEquals(0, clienteRepository.findById(clienteId).orElseThrow().getIntentosFallidos());
     }
 
     @Test
