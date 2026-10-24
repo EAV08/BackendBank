@@ -35,9 +35,15 @@ jobs:
         run: chmod +x mvnw
 
       # verify incluye test. El agente de JaCoCo mide mientras corren las pruebas
-      # y el goal report, ligado a la fase test, escribe target/site/jacoco.
+      # y deja los datos en target/jacoco.exec.
       - name: Compilar y probar
         run: ./mvnw -B verify
+
+      # Si JUnit falla, Maven corta la fase test y no llega al reporte.
+      # Este paso lee jacoco.exec y escribe el XML y el HTML igual.
+      - name: Generar informe de JaCoCo
+        if: always()
+        run: ./mvnw -B org.jacoco:jacoco-maven-plugin:0.8.13:report
 
       # if: always() sube los reportes también cuando alguna prueba falla.
       # Los dos directorios comparten target como raíz del artefacto, así que
