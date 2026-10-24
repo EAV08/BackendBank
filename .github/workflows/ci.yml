@@ -55,6 +55,7 @@ jobs:
   sonar:
     name: Análisis Sonar
     needs: ci
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
@@ -91,6 +92,7 @@ jobs:
   jacoco:
     name: Cobertura JaCoCo
     needs: sonar
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Recuperar el informe de JaCoCo
