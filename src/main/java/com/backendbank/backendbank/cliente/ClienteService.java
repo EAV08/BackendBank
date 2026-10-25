@@ -27,8 +27,11 @@ public class ClienteService {
     static final String MENSAJE_CREDENCIALES = "el usuario o la contraseña son inválidos";
     public static final String MENSAJE_INACTIVO = "su usuario está inactivo y debe contactar al banco";
     static final String MENSAJE_BLOQUEADO = "su usuario está bloqueado y debe contactar al banco";
+    static final String MENSAJE_BLOQUEO_TEMPORAL =
+            "Su cuenta está bloqueada temporalmente. Inténtelo nuevamente en 15 minutos o contacte al banco.";
     static final String MENSAJE_PENDIENTE = "su usuario aún no está activo y debe contactar al banco";
     static final int MAX_INTENTOS_FALLIDOS = 3;
+    static final int MINUTOS_BLOQUEO_TEMPORAL = 15;
     static final String MOTIVO_BLOQUEO = "bloqueado por intentos fallidos de ingreso";
 
     private final ClienteRepository clienteRepository;
@@ -150,12 +153,17 @@ public class ClienteService {
             return Cliente.ESTADO_ACTIVO.equals(cliente.getEstado());
         }
         if (Cliente.ESTADO_ACTIVO.equals(estadoSolicitado)) {
-            return Cliente.ESTADO_INACTIVO.equals(cliente.getEstado());
+            return Cliente.ESTADO_INACTIVO.equals(cliente.getEstado())
+                    || Cliente.ESTADO_PENDIENTE_DE_VALIDACION.equals(cliente.getEstado());
         }
         return false;
     }
 
-    @Transactional(noRollbackFor = {CredencialesInvalidasException.class, IngresoRechazadoException.class})
+    @Transactional(noRollbackFor = {
+            CredencialesInvalidasException.class,
+            IngresoRechazadoException.class,
+            BloqueoTemporalException.class
+    })
     public IngresoResponse ingresar(IngresoRequest request) {
         Cliente cliente = clienteRepository.findByUsuario(request.usuario()).orElse(null);
         if (cliente == null) {
@@ -168,21 +176,28 @@ public class ClienteService {
             }
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
-        if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
-            if (cliente.getIntentosFallidos() != 0) {
-                cliente.setIntentosFallidos(0);
-                clienteRepository.saveAndFlush(cliente);
+        if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
+            if (bloqueoTemporalVigente(cliente)) {
+                throw new BloqueoTemporalException(MENSAJE_BLOQUEO_TEMPORAL);
             }
-            String token = tokenService.generar(cliente.getIdCliente(), cliente.getUsuario(), cliente.getRol());
-            return new IngresoResponse(cliente.getIdCliente(), cliente.getEstado(), MENSAJE_INGRESO, token);
+            if (cliente.getBloqueadoHasta() != null) {
+                levantarBloqueoTemporal(cliente);
+            } else {
+                throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
+            }
         }
         if (Cliente.ESTADO_INACTIVO.equals(cliente.getEstado())) {
             throw new IngresoRechazadoException(MENSAJE_INACTIVO);
         }
-        if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
-            throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
+        if (!Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
+            throw new IngresoRechazadoException(MENSAJE_PENDIENTE);
         }
-        throw new IngresoRechazadoException(MENSAJE_PENDIENTE);
+        if (cliente.getIntentosFallidos() != 0) {
+            cliente.setIntentosFallidos(0);
+            clienteRepository.saveAndFlush(cliente);
+        }
+        String token = tokenService.generar(cliente.getIdCliente(), cliente.getUsuario(), cliente.getRol());
+        return new IngresoResponse(cliente.getIdCliente(), cliente.getEstado(), MENSAJE_INGRESO, token);
     }
 
     private boolean contrasenaCoincide(Cliente cliente, String plana) {
@@ -202,14 +217,30 @@ public class ClienteService {
         int intentos = cliente.getIntentosFallidos() + 1;
         cliente.setIntentosFallidos(intentos);
         if (intentos >= MAX_INTENTOS_FALLIDOS) {
+            OffsetDateTime ahora = OffsetDateTime.now();
             cliente.setEstado(Cliente.ESTADO_BLOQUEADO);
             cliente.setMotivo(MOTIVO_BLOQUEO);
-            cliente.setFechaActualizacion(OffsetDateTime.now());
+            cliente.setFechaActualizacion(ahora);
+            cliente.setBloqueadoHasta(ahora.plusMinutes(MINUTOS_BLOQUEO_TEMPORAL));
         }
         clienteRepository.saveAndFlush(cliente);
         if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
             throw new IngresoRechazadoException(MENSAJE_BLOQUEADO);
         }
+    }
+
+    private boolean bloqueoTemporalVigente(Cliente cliente) {
+        OffsetDateTime hasta = cliente.getBloqueadoHasta();
+        return hasta != null && OffsetDateTime.now().isBefore(hasta);
+    }
+
+    private void levantarBloqueoTemporal(Cliente cliente) {
+        cliente.setEstado(Cliente.ESTADO_ACTIVO);
+        cliente.setIntentosFallidos(0);
+        cliente.setBloqueadoHasta(null);
+        cliente.setMotivo(null);
+        cliente.setFechaActualizacion(OffsetDateTime.now());
+        clienteRepository.saveAndFlush(cliente);
     }
 
     private Cliente exigirAdministrador(UUID actualizadoPor) {
@@ -284,6 +315,13 @@ class CredencialesInvalidasException extends RuntimeException {
 class IngresoRechazadoException extends RuntimeException {
 
     IngresoRechazadoException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class BloqueoTemporalException extends RuntimeException {
+
+    BloqueoTemporalException(String mensaje) {
         super(mensaje);
     }
 }

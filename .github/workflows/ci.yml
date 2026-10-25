@@ -1,10 +1,10 @@
 # Integración continua del Sprint 2.
-# En cada push y en cada pull request GitHub Actions compila, corre JUnit,
-# publica el análisis en SonarCloud y guarda la evidencia (Surefire y JaCoCo).
+# En cada push y en cada pull request hay tres jobs encadenados:
+# CI corre JUnit y genera el informe de JaCoCo, Análisis Sonar lo publica
+# en SonarCloud y Cobertura JaCoCo deja ese informe como artefacto propio.
 # No despliega la aplicación.
 # Las pruebas usan H2 en memoria (src/test/resources/application.properties),
-# así que este job no necesita PostgreSQL. El análisis sí necesita el secret
-# SONAR_TOKEN (token de SonarCloud, no va en el repositorio).
+# así que CI no necesita PostgreSQL. Sonar sí necesita el secret SONAR_TOKEN.
 
 name: CI
 
@@ -13,16 +13,12 @@ on:
   pull_request:
 
 jobs:
-  test:
+  ci:
+    name: CI
     runs-on: ubuntu-latest
     steps:
-      # Baja el commit que disparó el workflow.
-      # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
-      # detectar el código nuevo y atribuir las líneas.
       - name: Descargar el código
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       # El pom declara Java 17. Temurin es la distribución y cache: maven
       # reutiliza ~/.m2 entre ejecuciones para no bajar dependencias cada vez.
@@ -38,25 +34,84 @@ jobs:
       - name: Permiso de ejecución del wrapper
         run: chmod +x mvnw
 
-      # -B evita prompts. verify incluye test, así que JaCoCo escribe
-      # target/site/jacoco/jacoco.xml antes de que el scanner lo lea.
-      # SONAR_TOKEN autentica contra SonarCloud. La clave, la organización
-      # y la URL están en el pom.
-      - name: Compilar, probar y analizar con SonarCloud
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+      # verify incluye test. El agente de JaCoCo mide mientras corren las pruebas
+      # y deja los datos en target/jacoco.exec.
+      - name: Compilar y probar
+        run: ./mvnw -B verify
 
-      # if: always() sube los reportes también cuando alguna prueba falla,
-      # para que Calidad pueda descargarlos desde la pestaña Actions.
-      # if-no-files-found: warn evita que este paso tumbe el job si JaCoCo
-      # no alcanzó a escribir el HTML.
+      # Si JUnit falla, Maven corta la fase test y no llega al reporte.
+      # Este paso lee jacoco.exec y escribe el XML y el HTML igual.
+      - name: Generar informe de JaCoCo
+        if: always()
+        run: ./mvnw -B org.jacoco:jacoco-maven-plugin:0.8.13:report
+
+      # if: always() sube los reportes también cuando alguna prueba falla.
+      # Los dos directorios comparten target como raíz del artefacto, así que
+      # al descargarlo en target quedan site/jacoco/jacoco.xml y surefire-reports.
       - name: Guardar evidencia de pruebas y cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reportes-ci
-          if-no-files-found: warn
+          if-no-files-found: error
           path: |
             target/surefire-reports
             target/site/jacoco
+
+  sonar:
+    name: Análisis Sonar
+    needs: ci
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 trae el historial completo. SonarCloud lo usa para
+      # detectar el código nuevo y atribuir las líneas.
+      - name: Descargar el código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Recuperar el informe de JaCoCo
+        uses: actions/download-artifact@v4
+        with:
+          name: reportes-ci
+          path: target
+
+      - name: Permiso de ejecución del wrapper
+        run: chmod +x mvnw
+
+      # -DskipTests evita repetir JUnit. El XML de cobertura ya está en
+      # target/site/jacoco/jacoco.xml, que es la ruta declarada en el pom.
+      # SONAR_TOKEN autentica contra SonarCloud.
+      - name: Publicar el análisis en SonarCloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -DskipTests
+
+  jacoco:
+    name: Cobertura JaCoCo
+    needs: sonar
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperar el informe de JaCoCo
+        uses: actions/download-artifact@v4
+        with:
+          name: reportes-ci
+          path: target
+
+      - name: Comprobar que el informe se generó
+        run: test -f target/site/jacoco/jacoco.xml && test -f target/site/jacoco/index.html
+
+      - name: Publicar el informe de cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-jacoco
+          path: target/site/jacoco
