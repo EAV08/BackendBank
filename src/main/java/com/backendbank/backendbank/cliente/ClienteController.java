@@ -21,7 +21,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -229,8 +232,10 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<?> datosInvalidos(MethodArgumentNotValidException ex) {
+        List<String> orden = ordenDeCampos(ex.getBindingResult().getTarget());
         List<FieldError> datos = ex.getBindingResult().getFieldErrors().stream()
                 .filter(error -> !"actualizadoPor".equals(error.getField()))
+                .sorted(Comparator.comparingInt(error -> indiceDe(orden, error.getField())))
                 .toList();
         if (datos.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -289,6 +294,11 @@ class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 
+    @ExceptionHandler(BloqueoTemporalException.class)
+    ResponseEntity<MensajeError> bloqueoTemporal(BloqueoTemporalException ex) {
+        return ResponseEntity.status(HttpStatus.LOCKED).body(new MensajeError(ex.getMessage()));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ValidacionErrorResponse> cuerpoIlegible(HttpMessageNotReadableException ex) {
         String detalle = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase();
@@ -300,6 +310,20 @@ class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(new ValidacionErrorResponse(
                 "Debe corregir los siguientes datos: solicitud",
                 java.util.List.of(new CampoError("solicitud", "La solicitud debe corregirse"))));
+    }
+
+    private List<String> ordenDeCampos(Object cuerpo) {
+        if (cuerpo == null || !cuerpo.getClass().isRecord()) {
+            return List.of();
+        }
+        return Arrays.stream(cuerpo.getClass().getRecordComponents())
+                .map(RecordComponent::getName)
+                .toList();
+    }
+
+    private int indiceDe(List<String> orden, String campo) {
+        int indice = orden.indexOf(campo);
+        return indice < 0 ? orden.size() : indice;
     }
 
     private boolean esIncompleto(String codigo) {

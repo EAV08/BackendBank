@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -582,7 +583,7 @@ class RegistroClienteTest {
     }
 
     @Test
-    void rechazaActivarCuandoEstaPendienteDeValidacion() throws Exception {
+    void activaClienteCuandoEstaPendienteDeValidacion() throws Exception {
         UUID adminId = registrarAdministrador();
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
         fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
@@ -590,13 +591,17 @@ class RegistroClienteTest {
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Validación completada", adminId)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.mensaje").value("el cambio de estado no está permitido desde el estado actual"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idCliente").value(clienteId.toString()))
+                .andExpect(jsonPath("$.estado").value("activo"))
+                .andExpect(jsonPath("$.motivo").value("Validación completada"))
+                .andExpect(jsonPath("$.mensaje").value("el cambio se realizó exitosamente"));
 
-        Cliente sinCambios = clienteRepository.findById(clienteId).orElseThrow();
-        assertEquals("pendiente_de_validacion", sinCambios.getEstado());
-        assertNull(sinCambios.getFechaActualizacion());
-        assertNull(sinCambios.getMotivo());
+        Cliente despues = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("activo", despues.getEstado());
+        assertEquals("Validación completada", despues.getMotivo());
+        assertEquals(adminId, despues.getActualizadoPor());
+        assertNotNull(despues.getFechaActualizacion());
     }
 
     @Test
@@ -822,12 +827,17 @@ class RegistroClienteTest {
         assertEquals("bloqueado", bloqueado.getEstado());
         assertEquals(ClienteService.MAX_INTENTOS_FALLIDOS, bloqueado.getIntentosFallidos());
         assertEquals(ClienteService.MOTIVO_BLOQUEO, bloqueado.getMotivo());
+        assertNotNull(bloqueado.getBloqueadoHasta());
+        assertTrue(bloqueado.getBloqueadoHasta().isAfter(OffsetDateTime.now().plusMinutes(14)));
+        assertTrue(bloqueado.getBloqueadoHasta().isBefore(OffsetDateTime.now().plusMinutes(16)));
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(ingresoJson("contacto", "clave123")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"));
+                .andExpect(status().is(423))
+                .andExpect(jsonPath("$.mensaje").value(
+                        "Su cuenta está bloqueada temporalmente. Inténtelo nuevamente en 15 minutos o contacte al banco."))
+                .andExpect(jsonPath("$.token").doesNotExist());
 
         assertEquals("bloqueado", clienteRepository.findById(clienteId).orElseThrow().getEstado());
     }

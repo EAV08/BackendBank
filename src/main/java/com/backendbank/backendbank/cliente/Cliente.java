@@ -66,6 +66,9 @@ public class Cliente {
     @Column(name = "intentos_fallidos", nullable = false)
     private int intentosFallidos;
 
+    @Column(name = "bloqueado_hasta")
+    private OffsetDateTime bloqueadoHasta;
+
     @PrePersist
     void asignarValoresIniciales() {
         if (idCliente == null) {
@@ -192,5 +195,13 @@ public class Cliente {
 
     public void setIntentosFallidos(int intentosFallidos) {
         this.intentosFallidos = intentosFallidos;
+    }
+
+    public OffsetDateTime getBloqueadoHasta() {
+        return bloqueadoHasta;
+    }
+
+    public void setBloqueadoHasta(OffsetDateTime bloqueadoHasta) {
+        this.bloqueadoHasta = bloqueadoHasta;
     }
 }

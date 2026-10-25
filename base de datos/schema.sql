@@ -19,9 +19,12 @@ CREATE TABLE IF NOT EXISTS clientes (
     fecha_actualizacion TIMESTAMPTZ,
     motivo              VARCHAR(200),
     intentos_fallidos   INTEGER      NOT NULL DEFAULT 0,
+    bloqueado_hasta     TIMESTAMPTZ,
     CONSTRAINT fk_clientes_actualizado_por
     FOREIGN KEY (actualizado_por) REFERENCES clientes (id_cliente)
     );
+
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS cuentas (
                                        id_cuenta               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
