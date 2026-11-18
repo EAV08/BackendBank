@@ -79,7 +79,33 @@ class ConsultarEstadoCuentaTest {
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CONTRASENA))
                 .andExpect(jsonPath("$.estado").doesNotExist());
 
-        assertEquals(0, clienteRepository.findByUsuario("contacto").orElseThrow().getIntentosFallidos());
+        assertEquals(1, clienteRepository.findByUsuario("contacto").orElseThrow().getIntentosFallidos());
+    }
+
+    @Test
+    void bloqueaElPerfilAlTercerIntentoFallido() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+        guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO);
+
+        for (int intento = 1; intento < 3; intento++) {
+            mockMvc.perform(post("/cuentas/estado")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(consultaJson("contacto", "clave-incorrecta-" + intento, "1000000001")))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CONTRASENA));
+        }
+
+        mockMvc.perform(post("/cuentas/estado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(consultaJson("contacto", "clave-incorrecta-3", "1000000001")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.mensaje").value("su usuario está bloqueado y debe contactar al banco"))
+                .andExpect(jsonPath("$.estado").doesNotExist());
+
+        var bloqueado = clienteRepository.findById(clienteId).orElseThrow();
+        assertEquals("bloqueado", bloqueado.getEstado());
+        assertEquals(3, bloqueado.getIntentosFallidos());
+        assertEquals(true, bloqueado.getBloqueadoHasta() != null);
     }
 
     @Test
@@ -133,7 +159,7 @@ class ConsultarEstadoCuentaTest {
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CONTRASENA))
                 .andExpect(jsonPath("$.estado").doesNotExist());
 
-        assertEquals(0, clienteRepository.findByUsuario("contacto").orElseThrow().getIntentosFallidos());
+        assertEquals(1, clienteRepository.findByUsuario("contacto").orElseThrow().getIntentosFallidos());
     }
 
     private String consultaJson(String usuario, String contrasena, String numeroCuenta) {

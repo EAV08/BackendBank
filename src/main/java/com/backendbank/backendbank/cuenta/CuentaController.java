@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -28,30 +29,29 @@ public class CuentaController {
     }
 
     @PostMapping
-    public ResponseEntity<CuentaCreadaResponse> crear(@Valid @RequestBody CrearCuentaRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(cuentaService.crear(request));
+    public ResponseEntity<CuentaCreadaResponse> crear(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(cuentaService.crear(autorizacion));
     }
 
     @PostMapping("/saldo")
-    public ResponseEntity<SaldoDisponibleResponse> consultar(@Valid @RequestBody ConsultarSaldoRequest request) {
-        return ResponseEntity.ok(cuentaService.consultar(request));
+    public ResponseEntity<SaldoDisponibleResponse> consultar(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody ConsultarSaldoRequest request) {
+        return ResponseEntity.ok(cuentaService.consultar(request, autorizacion));
     }
 
     @PostMapping("/bloqueo")
-    public ResponseEntity<CuentaBloqueadaResponse> bloquear(@Valid @RequestBody BloquearCuentaRequest request) {
-        return ResponseEntity.ok(cuentaService.bloquear(request));
+    public ResponseEntity<CuentaBloqueadaResponse> bloquear(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody BloquearCuentaRequest request) {
+        return ResponseEntity.ok(cuentaService.bloquear(request, autorizacion));
     }
 
     @PostMapping("/estado")
     public ResponseEntity<EstadoCuentaResponse> consultarEstado(@Valid @RequestBody ConsultarEstadoRequest request) {
         return ResponseEntity.ok(cuentaService.consultarEstado(request));
     }
-}
-
-record CrearCuentaRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente
-) {
 }
 
 record CuentaCreadaResponse(
@@ -65,9 +65,6 @@ record CuentaCreadaResponse(
 }
 
 record ConsultarSaldoRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente,
-
         @NotNull(message = "El id cuenta debe completarse")
         UUID idCuenta
 ) {
@@ -84,9 +81,6 @@ record SaldoDisponibleResponse(
 }
 
 record BloquearCuentaRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente,
-
         @NotNull(message = "El id cuenta debe completarse")
         UUID idCuenta,
 

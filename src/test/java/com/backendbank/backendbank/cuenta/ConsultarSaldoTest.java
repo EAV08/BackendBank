@@ -3,6 +3,7 @@ package com.backendbank.backendbank.cuenta;
 import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteRepository;
 import com.backendbank.backendbank.cliente.ClienteService;
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,12 +36,16 @@ class ConsultarSaldoTest {
     @Autowired
     private CuentaRepository cuentaRepository;
 
+    @Autowired
+    private TokenService tokenService;
+
     @Test
     void informaElSaldoDisponibleDeUnaCuentaActiva() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
         Cuenta cuenta = guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("150.50"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, cuenta.getIdCuenta())))
                 .andExpect(status().isOk())
@@ -60,6 +65,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000002", Cuenta.ESTADO_BLOQUEADO, new BigDecimal("80.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, cuenta.getIdCuenta())))
                 .andExpect(status().isForbidden())
@@ -73,6 +79,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000003", Cuenta.ESTADO_INACTIVO, new BigDecimal("40.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, cuenta.getIdCuenta())))
                 .andExpect(status().isForbidden())
@@ -87,6 +94,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(duenoId, "1000000004", Cuenta.ESTADO_ACTIVO, new BigDecimal("10.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(otroId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(otroId, cuenta.getIdCuenta())))
                 .andExpect(status().isNotFound())
@@ -96,10 +104,12 @@ class ConsultarSaldoTest {
 
     @Test
     void rechazaCuandoElClienteNoExiste() throws Exception {
+        UUID inexistente = UUID.fromString("00000000-0000-0000-0000-000000000000");
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(inexistente))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(
-                                UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                                inexistente,
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.mensaje").value(ClienteService.MENSAJE_NO_ENCONTRADO))
@@ -113,6 +123,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000005", Cuenta.ESTADO_ACTIVO, new BigDecimal("80.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                 .andExpect(status().isForbidden())
@@ -130,6 +141,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000006", Cuenta.ESTADO_ACTIVO, new BigDecimal("15.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, cuenta.getIdCuenta())))
                 .andExpect(status().isForbidden())
@@ -144,6 +156,7 @@ class ConsultarSaldoTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000007", Cuenta.ESTADO_ACTIVO, new BigDecimal("15.00"));
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, cuenta.getIdCuenta())))
                 .andExpect(status().isForbidden())
@@ -156,11 +169,19 @@ class ConsultarSaldoTest {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(consultaJson(clienteId, UUID.fromString("00000000-0000-0000-0000-000000000001"))))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_CUENTA_NO_ENCONTRADA))
                 .andExpect(jsonPath("$.saldo").doesNotExist());
+    }
+
+    private String autorizacion(UUID idCliente) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElse(null);
+        String usuario = cliente == null ? "desconocido" : cliente.getUsuario();
+        String rol = cliente == null ? Cliente.ROL_CLIENTE : cliente.getRol();
+        return "Bearer " + tokenService.generar(idCliente, usuario, rol);
     }
 
     private void fijarEstado(UUID idCliente, String estado) {
@@ -172,10 +193,9 @@ class ConsultarSaldoTest {
     private String consultaJson(UUID idCliente, UUID idCuenta) {
         return """
                 {
-                  "idCliente": "%s",
                   "idCuenta": "%s"
                 }
-                """.formatted(idCliente, idCuenta);
+                """.formatted(idCuenta);
     }
 
     private Cuenta guardarCuenta(UUID idCliente, String numero, String estado, BigDecimal saldo) {

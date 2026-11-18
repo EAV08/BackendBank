@@ -3,6 +3,7 @@ package com.backendbank.backendbank.cuenta;
 import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteRepository;
 import com.backendbank.backendbank.cliente.ClienteService;
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,12 +39,16 @@ class BloquearCuentaTest {
     @Autowired
     private ClienteRepository clienteRepository;
 
+    @Autowired
+    private TokenService tokenService;
+
     @Test
     void bloqueaLaCuentaActivaYSuspendeLasOperaciones() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
         Cuenta cuenta = guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "fraude")))
                 .andExpect(status().isOk())
@@ -66,6 +71,7 @@ class BloquearCuentaTest {
                 clienteId, "1000000002", Cuenta.ESTADO_BLOQUEADO, "fraude", true, bloqueadaEn);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "pérdida")))
                 .andExpect(status().isOk())
@@ -87,6 +93,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000003", Cuenta.ESTADO_INACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "pérdida")))
                 .andExpect(status().isForbidden())
@@ -105,6 +112,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(duenoId, "1000000004", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(otroId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(otroId, cuenta.getIdCuenta(), "fraude")))
                 .andExpect(status().isNotFound())
@@ -117,10 +125,12 @@ class BloquearCuentaTest {
 
     @Test
     void rechazaCuandoElClienteNoExiste() throws Exception {
+        UUID inexistente = UUID.fromString("00000000-0000-0000-0000-000000000000");
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(inexistente))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(
-                                UUID.fromString("00000000-0000-0000-0000-000000000000"),
+                                inexistente,
                                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                                 "fraude")))
                 .andExpect(status().isNotFound())
@@ -136,6 +146,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000005", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "fraude")))
                 .andExpect(status().isForbidden())
@@ -153,6 +164,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000006", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "fraude")))
                 .andExpect(status().isForbidden())
@@ -168,6 +180,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000007", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "pérdida")))
                 .andExpect(status().isForbidden())
@@ -181,6 +194,7 @@ class BloquearCuentaTest {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(
                                 clienteId,
@@ -198,6 +212,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000008", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "perdida")))
                 .andExpect(status().isOk())
@@ -215,6 +230,7 @@ class BloquearCuentaTest {
         Cuenta cuenta = guardarCuenta(clienteId, "1000000009", Cuenta.ESTADO_ACTIVO, null, false, null);
 
         mockMvc.perform(post("/cuentas/bloqueo")
+                        .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bloqueoJson(clienteId, cuenta.getIdCuenta(), "robo")))
                 .andExpect(status().isBadRequest())
@@ -226,6 +242,13 @@ class BloquearCuentaTest {
         assertNull(despues.getMotivo());
     }
 
+    private String autorizacion(UUID idCliente) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElse(null);
+        String usuario = cliente == null ? "desconocido" : cliente.getUsuario();
+        String rol = cliente == null ? Cliente.ROL_CLIENTE : cliente.getRol();
+        return "Bearer " + tokenService.generar(idCliente, usuario, rol);
+    }
+
     private void fijarEstado(UUID idCliente, String estado) {
         Cliente cliente = clienteRepository.findById(idCliente).orElseThrow();
         cliente.setEstado(estado);
@@ -235,11 +258,10 @@ class BloquearCuentaTest {
     private String bloqueoJson(UUID idCliente, UUID idCuenta, String motivo) {
         return """
                 {
-                  "idCliente": "%s",
                   "idCuenta": "%s",
                   "motivo": "%s"
                 }
-                """.formatted(idCliente, idCuenta, motivo);
+                """.formatted(idCuenta, motivo);
     }
 
     private Cuenta guardarCuenta(
