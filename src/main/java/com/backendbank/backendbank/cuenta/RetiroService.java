@@ -2,6 +2,10 @@ package com.backendbank.backendbank.cuenta;
 
 import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteService;
+import com.backendbank.backendbank.transaccion.EventoTransaccion;
+import com.backendbank.backendbank.transaccion.EventoTransaccionRepository;
+import com.backendbank.backendbank.transaccion.Transaccion;
+import com.backendbank.backendbank.transaccion.TransaccionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,14 +23,20 @@ public class RetiroService {
 
     private final CuentaRepository cuentaRepository;
     private final RetiroRepository retiroRepository;
+    private final TransaccionRepository transaccionRepository;
+    private final EventoTransaccionRepository eventoTransaccionRepository;
     private final ClienteService clienteService;
 
     public RetiroService(
             CuentaRepository cuentaRepository,
             RetiroRepository retiroRepository,
+            TransaccionRepository transaccionRepository,
+            EventoTransaccionRepository eventoTransaccionRepository,
             ClienteService clienteService) {
         this.cuentaRepository = cuentaRepository;
         this.retiroRepository = retiroRepository;
+        this.transaccionRepository = transaccionRepository;
+        this.eventoTransaccionRepository = eventoTransaccionRepository;
         this.clienteService = clienteService;
     }
 
@@ -55,6 +65,21 @@ public class RetiroService {
         retiro.setIdCuenta(cuenta.getIdCuenta());
         retiro.setMonto(monto);
         Retiro guardado = retiroRepository.saveAndFlush(retiro);
+
+        Transaccion transaccion = new Transaccion();
+        transaccion.setIdCliente(quien.getIdCliente());
+        transaccion.setIdCuentaOrigen(cuenta.getIdCuenta());
+        transaccion.setMonto(monto);
+        transaccion.setMoneda(Transaccion.MONEDA_COP);
+        transaccion.setEstado(Transaccion.ESTADO_APROBADO);
+        Transaccion guardadaTransaccion = transaccionRepository.saveAndFlush(transaccion);
+
+        EventoTransaccion evento = new EventoTransaccion();
+        evento.setIdTransaccion(guardadaTransaccion.getIdTransaccion());
+        evento.setTipoEvento(EventoTransaccion.RETIRO);
+        evento.setEstadoNuevo(Transaccion.ESTADO_APROBADO);
+        evento.setDetalle(MENSAJE_EXITO + " por " + monto.toPlainString());
+        eventoTransaccionRepository.saveAndFlush(evento);
 
         return new RetiroRealizadoResponse(
                 guardado.getIdRetiro(),

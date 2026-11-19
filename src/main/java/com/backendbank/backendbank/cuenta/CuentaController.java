@@ -1,6 +1,7 @@
 package com.backendbank.backendbank.cuenta;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -23,10 +24,15 @@ import java.util.UUID;
 public class CuentaController {
 
     private final CuentaService cuentaService;
+    private final DepositoService depositoService;
     private final RetiroService retiroService;
 
-    public CuentaController(CuentaService cuentaService, RetiroService retiroService) {
+    public CuentaController(
+            CuentaService cuentaService,
+            DepositoService depositoService,
+            RetiroService retiroService) {
         this.cuentaService = cuentaService;
+        this.depositoService = depositoService;
         this.retiroService = retiroService;
     }
 
@@ -53,6 +59,20 @@ public class CuentaController {
     @PostMapping("/estado")
     public ResponseEntity<EstadoCuentaResponse> consultarEstado(@Valid @RequestBody ConsultarEstadoRequest request) {
         return ResponseEntity.ok(cuentaService.consultarEstado(request));
+    }
+
+    @PostMapping("/deposito")
+    public ResponseEntity<ConfirmacionDepositoResponse> prepararDeposito(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody DepositoRequest request) {
+        return ResponseEntity.ok(depositoService.preparar(request, autorizacion));
+    }
+
+    @PostMapping("/deposito/confirmacion")
+    public ResponseEntity<DepositoRealizadoResponse> confirmarDeposito(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody DepositoRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(depositoService.confirmar(request, autorizacion));
     }
 
     @PostMapping("/retiro")
@@ -141,6 +161,38 @@ record ConsultarEstadoRequest(
 record EstadoCuentaResponse(String numeroCuenta, String estado, String mensaje) {
 }
 
+record DepositoRequest(
+        @NotBlank(message = "El número de cuenta debe completarse")
+        @Size(max = 20, message = "El número de cuenta debe corregirse")
+        String numeroCuenta,
+
+        @NotNull(message = "El monto debe completarse")
+        @Digits(integer = 12, fraction = 2, message = "El monto debe corregirse")
+        BigDecimal monto
+) {
+    DepositoRequest {
+        numeroCuenta = numeroCuenta == null ? null : numeroCuenta.trim();
+    }
+}
+
+record ConfirmacionDepositoResponse(
+        String numeroCuenta,
+        String nombrePropietario,
+        BigDecimal monto,
+        String mensaje
+) {
+}
+
+record DepositoRealizadoResponse(
+        UUID idTransaccion,
+        String numeroCuenta,
+        String nombrePropietario,
+        BigDecimal monto,
+        BigDecimal saldo,
+        String mensaje
+) {
+}
+
 record RetiroRequest(
         @NotBlank(message = "El número de cuenta debe completarse")
         @Size(max = 20, message = "El número de cuenta debe corregirse")
@@ -207,6 +259,21 @@ class CuentaExceptionHandler {
     @ExceptionHandler(ContrasenaIncorrectaException.class)
     ResponseEntity<MensajeError> contrasenaIncorrecta(ContrasenaIncorrectaException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MontoDepositoInvalidoException.class)
+    ResponseEntity<MensajeError> montoDepositoInvalido(MontoDepositoInvalidoException ex) {
+        return ResponseEntity.badRequest().body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CuentaDepositoNoEncontradaException.class)
+    ResponseEntity<MensajeError> cuentaDepositoNoEncontrada(CuentaDepositoNoEncontradaException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DepositoRechazadoException.class)
+    ResponseEntity<MensajeError> depositoRechazado(DepositoRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 
     @ExceptionHandler(MontoRetiroInvalidoException.class)

@@ -280,6 +280,11 @@ class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
     }
 
+    @ExceptionHandler(IdentificacionRequeridaException.class)
+    ResponseEntity<MensajeError> identificacionRequerida(IdentificacionRequeridaException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
     @ExceptionHandler(CredencialesInvalidasException.class)
     ResponseEntity<MensajeError> credencialesInvalidas(CredencialesInvalidasException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));

@@ -45,77 +45,77 @@ class RetirarDineroTest {
     @Test
     void retiraDeLaCuentaPropiaYLoDejaEnElHistorial() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
-        Cuenta cuenta = guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("500000.00"));
+        Cuenta cuenta = guardarCuenta(clienteId, "4000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("40.00"));
 
         mockMvc.perform(post("/cuentas/retiro")
                         .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(retiroJson("1000000001", "150000")))
+                        .content(retiroJson("4000000001", "7.25")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.numeroCuenta").value("1000000001"))
-                .andExpect(jsonPath("$.monto").value(150000.00))
-                .andExpect(jsonPath("$.saldo").value(350000.00))
+                .andExpect(jsonPath("$.numeroCuenta").value("4000000001"))
+                .andExpect(jsonPath("$.monto").value(7.25))
+                .andExpect(jsonPath("$.saldo").value(32.75))
                 .andExpect(jsonPath("$.mensaje").value(RetiroService.MENSAJE_EXITO))
                 .andExpect(jsonPath("$.idRetiro").isNotEmpty());
 
-        assertEquals(0, new BigDecimal("350000.00").compareTo(saldoDe(cuenta)));
+        assertEquals(0, new BigDecimal("32.75").compareTo(saldoDe(cuenta)));
         Retiro historial = retiroRepository.findByIdCuentaOrderByFechaAsc(cuenta.getIdCuenta()).get(0);
         assertEquals(clienteId, historial.getIdCliente());
-        assertEquals(0, new BigDecimal("150000.00").compareTo(historial.getMonto()));
+        assertEquals(0, new BigDecimal("7.25").compareTo(historial.getMonto()));
     }
 
     @Test
     void rechazaMontoCeroYNegativoSinMoverElSaldo() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
-        Cuenta cuenta = guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("100000.00"));
+        Cuenta cuenta = guardarCuenta(clienteId, "4000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("40.00"));
 
         mockMvc.perform(post("/cuentas/retiro")
                         .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(retiroJson("1000000001", "0")))
+                        .content(retiroJson("4000000001", "0")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensaje").value(RetiroService.MENSAJE_MONTO));
 
         mockMvc.perform(post("/cuentas/retiro")
                         .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(retiroJson("1000000001", "-1")))
+                        .content(retiroJson("4000000001", "-1")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.mensaje").value(RetiroService.MENSAJE_MONTO));
 
-        assertEquals(0, new BigDecimal("100000.00").compareTo(saldoDe(cuenta)));
+        assertEquals(0, new BigDecimal("40.00").compareTo(saldoDe(cuenta)));
         assertTrue(retiroRepository.findByIdCuentaOrderByFechaAsc(cuenta.getIdCuenta()).isEmpty());
     }
 
     @Test
     void rechazaCuandoLaCuentaEsDeOtroCliente() throws Exception {
         UUID duenoId = registrar("Otra Tienda", "800999111", "otro@elsol.com");
-        Cuenta ajena = guardarCuenta(duenoId, "555000111", Cuenta.ESTADO_ACTIVO, new BigDecimal("500000.00"));
+        Cuenta ajena = guardarCuenta(duenoId, "4000000002", Cuenta.ESTADO_ACTIVO, new BigDecimal("40.00"));
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
 
         mockMvc.perform(post("/cuentas/retiro")
                         .header("Authorization", autorizacion(clienteId))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(retiroJson("555000111", "150000")))
+                        .content(retiroJson("4000000002", "7.25")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.mensaje").value(RetiroService.MENSAJE_AJENA));
 
-        assertEquals(0, new BigDecimal("500000.00").compareTo(saldoDe(ajena)));
+        assertEquals(0, new BigDecimal("40.00").compareTo(saldoDe(ajena)));
         assertTrue(retiroRepository.findByIdCuentaOrderByFechaAsc(ajena.getIdCuenta()).isEmpty());
     }
 
     @Test
     void rechazaCuandoNoHaySesion() throws Exception {
         UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
-        Cuenta cuenta = guardarCuenta(clienteId, "1000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("500000.00"));
+        Cuenta cuenta = guardarCuenta(clienteId, "4000000001", Cuenta.ESTADO_ACTIVO, new BigDecimal("40.00"));
 
         mockMvc.perform(post("/cuentas/retiro")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(retiroJson("1000000001", "150000")))
+                        .content(retiroJson("4000000001", "7.25")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
-        assertEquals(0, new BigDecimal("500000.00").compareTo(saldoDe(cuenta)));
+        assertEquals(0, new BigDecimal("40.00").compareTo(saldoDe(cuenta)));
         assertEquals(0, retiroRepository.count());
     }
 
