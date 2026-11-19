@@ -23,9 +23,11 @@ import java.util.UUID;
 public class CuentaController {
 
     private final CuentaService cuentaService;
+    private final RetiroService retiroService;
 
-    public CuentaController(CuentaService cuentaService) {
+    public CuentaController(CuentaService cuentaService, RetiroService retiroService) {
         this.cuentaService = cuentaService;
+        this.retiroService = retiroService;
     }
 
     @PostMapping
@@ -51,6 +53,13 @@ public class CuentaController {
     @PostMapping("/estado")
     public ResponseEntity<EstadoCuentaResponse> consultarEstado(@Valid @RequestBody ConsultarEstadoRequest request) {
         return ResponseEntity.ok(cuentaService.consultarEstado(request));
+    }
+
+    @PostMapping("/retiro")
+    public ResponseEntity<RetiroRealizadoResponse> retirar(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody RetiroRequest request) {
+        return ResponseEntity.ok(retiroService.retirar(request, autorizacion));
     }
 }
 
@@ -132,6 +141,28 @@ record ConsultarEstadoRequest(
 record EstadoCuentaResponse(String numeroCuenta, String estado, String mensaje) {
 }
 
+record RetiroRequest(
+        @NotBlank(message = "El número de cuenta debe completarse")
+        @Size(max = 20, message = "El número de cuenta debe corregirse")
+        String numeroCuenta,
+
+        @NotNull(message = "El monto debe completarse")
+        BigDecimal monto
+) {
+    RetiroRequest {
+        numeroCuenta = numeroCuenta == null ? null : numeroCuenta.trim();
+    }
+}
+
+record RetiroRealizadoResponse(
+        UUID idRetiro,
+        String numeroCuenta,
+        BigDecimal monto,
+        BigDecimal saldo,
+        String mensaje
+) {
+}
+
 record MensajeError(String mensaje) {
 }
 
@@ -176,5 +207,15 @@ class CuentaExceptionHandler {
     @ExceptionHandler(ContrasenaIncorrectaException.class)
     ResponseEntity<MensajeError> contrasenaIncorrecta(ContrasenaIncorrectaException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MontoRetiroInvalidoException.class)
+    ResponseEntity<MensajeError> montoRetiroInvalido(MontoRetiroInvalidoException ex) {
+        return ResponseEntity.badRequest().body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(RetiroRechazadoException.class)
+    ResponseEntity<MensajeError> retiroRechazado(RetiroRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 }

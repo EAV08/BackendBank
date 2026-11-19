@@ -223,7 +223,8 @@ class ApiExceptionHandler {
             Map.entry("motivo", "motivo"),
             Map.entry("idCliente", "id cliente"),
             Map.entry("idCuenta", "id cuenta"),
-            Map.entry("numeroCuenta", "número de cuenta")
+            Map.entry("numeroCuenta", "número de cuenta"),
+            Map.entry("monto", "monto")
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
