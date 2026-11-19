@@ -223,8 +223,7 @@ class ApiExceptionHandler {
             Map.entry("motivo", "motivo"),
             Map.entry("idCliente", "id cliente"),
             Map.entry("idCuenta", "id cuenta"),
-            Map.entry("numeroCuenta", "número de cuenta"),
-            Map.entry("monto", "monto")
+            Map.entry("numeroCuenta", "número de cuenta")
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -277,11 +276,6 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(SesionNoVigenteException.class)
     ResponseEntity<MensajeError> sesionNoVigente(SesionNoVigenteException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
-    }
-
-    @ExceptionHandler(IdentificacionRequeridaException.class)
-    ResponseEntity<MensajeError> identificacionRequerida(IdentificacionRequeridaException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
     }
 

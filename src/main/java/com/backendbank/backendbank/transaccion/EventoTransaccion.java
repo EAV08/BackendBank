@@ -15,8 +15,6 @@ import java.util.UUID;
 @Table(name = "eventos_transaccion")
 public class EventoTransaccion {
 
-    public static final String DEPOSITO = "deposito";
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_evento", nullable = false, updatable = false)
