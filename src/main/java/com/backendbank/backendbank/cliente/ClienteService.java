@@ -230,6 +230,14 @@ public class ClienteService {
                 .orElseThrow(() -> new ClienteNoEncontradoException(MENSAJE_NO_ENCONTRADO));
     }
 
+    public Cliente clienteIdentificado(String autorizacion) {
+        try {
+            return clienteAutenticado(autorizacion);
+        } catch (SesionNoVigenteException ex) {
+            throw new IdentificacionRequeridaException("debe identificarse para continuar");
+        }
+    }
+
     private void registrarIntentoFallido(Cliente cliente) {
         int intentos = cliente.getIntentosFallidos() + 1;
         cliente.setIntentosFallidos(intentos);
@@ -354,6 +362,13 @@ class IngresoRechazadoException extends RuntimeException {
 class BloqueoTemporalException extends RuntimeException {
 
     BloqueoTemporalException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class IdentificacionRequeridaException extends RuntimeException {
+
+    IdentificacionRequeridaException(String mensaje) {
         super(mensaje);
     }
 }
