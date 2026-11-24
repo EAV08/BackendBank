@@ -10,7 +10,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
     private final String[] origenes;
 
-    public CorsConfig(@Value("${cors.origenes:http://localhost:5173}") String origenes) {
+    public CorsConfig(@Value("${cors.origenes:https://frontendbank-a7rq.onrender.com}") String origenes) {
         this.origenes = origenes.split(",");
     }
 
