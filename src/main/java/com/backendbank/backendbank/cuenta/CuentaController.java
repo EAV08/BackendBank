@@ -26,14 +26,17 @@ public class CuentaController {
     private final CuentaService cuentaService;
     private final DepositoService depositoService;
     private final RetiroService retiroService;
+    private final TransferenciaService transferenciaService;
 
     public CuentaController(
             CuentaService cuentaService,
             DepositoService depositoService,
-            RetiroService retiroService) {
+            RetiroService retiroService,
+            TransferenciaService transferenciaService) {
         this.cuentaService = cuentaService;
         this.depositoService = depositoService;
         this.retiroService = retiroService;
+        this.transferenciaService = transferenciaService;
     }
 
     @PostMapping
@@ -80,6 +83,13 @@ public class CuentaController {
             @RequestHeader(name = "Authorization", required = false) String autorizacion,
             @Valid @RequestBody RetiroRequest request) {
         return ResponseEntity.ok(retiroService.retirar(request, autorizacion));
+    }
+
+    @PostMapping("/transferencia")
+    public ResponseEntity<TransferenciaRealizadaResponse> transferir(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody TransferenciaRequest request) {
+        return ResponseEntity.ok(transferenciaService.transferir(request, autorizacion));
     }
 }
 
@@ -215,6 +225,34 @@ record RetiroRealizadoResponse(
 ) {
 }
 
+record TransferenciaRequest(
+        @NotBlank(message = "El número de cuenta origen debe completarse")
+        @Size(max = 20, message = "El número de cuenta origen debe corregirse")
+        String numeroCuentaOrigen,
+
+        @NotBlank(message = "El número de cuenta destino debe completarse")
+        @Size(max = 20, message = "El número de cuenta destino debe corregirse")
+        String numeroCuentaDestino,
+
+        @NotNull(message = "El monto debe completarse")
+        BigDecimal monto
+) {
+    TransferenciaRequest {
+        numeroCuentaOrigen = numeroCuentaOrigen == null ? null : numeroCuentaOrigen.trim();
+        numeroCuentaDestino = numeroCuentaDestino == null ? null : numeroCuentaDestino.trim();
+    }
+}
+
+record TransferenciaRealizadaResponse(
+        UUID idTransaccion,
+        String numeroCuentaOrigen,
+        String numeroCuentaDestino,
+        BigDecimal monto,
+        BigDecimal saldoOrigen,
+        String mensaje
+) {
+}
+
 record MensajeError(String mensaje) {
 }
 
@@ -283,6 +321,16 @@ class CuentaExceptionHandler {
 
     @ExceptionHandler(RetiroRechazadoException.class)
     ResponseEntity<MensajeError> retiroRechazado(RetiroRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MontoTransferenciaInvalidoException.class)
+    ResponseEntity<MensajeError> montoTransferenciaInvalido(MontoTransferenciaInvalidoException ex) {
+        return ResponseEntity.badRequest().body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(TransferenciaRechazadaException.class)
+    ResponseEntity<MensajeError> transferenciaRechazada(TransferenciaRechazadaException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 }

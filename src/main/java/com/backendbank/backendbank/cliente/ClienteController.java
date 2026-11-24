@@ -224,6 +224,8 @@ class ApiExceptionHandler {
             Map.entry("idCliente", "id cliente"),
             Map.entry("idCuenta", "id cuenta"),
             Map.entry("numeroCuenta", "número de cuenta"),
+            Map.entry("numeroCuentaOrigen", "número de cuenta origen"),
+            Map.entry("numeroCuentaDestino", "número de cuenta destino"),
             Map.entry("monto", "monto")
     );
 
