@@ -42,6 +42,7 @@ public class CuentaService {
 
     private final CuentaRepository cuentaRepository;
     private final ClienteRepository clienteRepository;
+    private final ClienteService clienteService;
     private final GeneradorNumeroCuenta generadorNumeroCuenta;
     private final ConsultaSaldo consultaSaldo;
     private final PasswordEncoder passwordEncoder;
@@ -50,11 +51,13 @@ public class CuentaService {
     public CuentaService(
             CuentaRepository cuentaRepository,
             ClienteRepository clienteRepository,
+            ClienteService clienteService,
             GeneradorNumeroCuenta generadorNumeroCuenta,
             ConsultaSaldo consultaSaldo,
             PasswordEncoder passwordEncoder) {
         this.cuentaRepository = cuentaRepository;
         this.clienteRepository = clienteRepository;
+        this.clienteService = clienteService;
         this.generadorNumeroCuenta = generadorNumeroCuenta;
         this.consultaSaldo = consultaSaldo;
         this.passwordEncoder = passwordEncoder;
@@ -66,9 +69,8 @@ public class CuentaService {
             GeneracionCuentaException.class,
             ClienteNoEncontradoException.class
     })
-    public CuentaCreadaResponse crear(CrearCuentaRequest request) {
-        Cliente cliente = clienteRepository.findById(request.idCliente())
-                .orElseThrow(() -> new ClienteNoEncontradoException(ClienteService.MENSAJE_NO_ENCONTRADO));
+    public CuentaCreadaResponse crear(String autorizacion) {
+        Cliente cliente = clienteService.clienteAutenticado(autorizacion);
         exigirPerfilHabilitado(cliente);
         if (cuentaRepository.countByIdClienteAndEstado(cliente.getIdCliente(), Cuenta.ESTADO_ACTIVO) >= MAX_CUENTAS_ACTIVAS) {
             throw new CreacionCuentaRechazadaException(MENSAJE_LIMITE);
@@ -100,9 +102,8 @@ public class CuentaService {
             CuentaNoEncontradaException.class,
             ClienteNoEncontradoException.class
     })
-    public SaldoDisponibleResponse consultar(ConsultarSaldoRequest request) {
-        Cliente cliente = clienteRepository.findById(request.idCliente())
-                .orElseThrow(() -> new ClienteNoEncontradoException(ClienteService.MENSAJE_NO_ENCONTRADO));
+    public SaldoDisponibleResponse consultar(ConsultarSaldoRequest request, String autorizacion) {
+        Cliente cliente = clienteService.clienteAutenticado(autorizacion);
         exigirClienteValidado(cliente);
 
         Cuenta cuenta = cuentaRepository.findByIdCuentaAndIdCliente(request.idCuenta(), cliente.getIdCliente())
@@ -129,9 +130,8 @@ public class CuentaService {
             CuentaNoEncontradaException.class,
             ClienteNoEncontradoException.class
     })
-    public CuentaBloqueadaResponse bloquear(BloquearCuentaRequest request) {
-        Cliente cliente = clienteRepository.findById(request.idCliente())
-                .orElseThrow(() -> new ClienteNoEncontradoException(ClienteService.MENSAJE_NO_ENCONTRADO));
+    public CuentaBloqueadaResponse bloquear(BloquearCuentaRequest request, String autorizacion) {
+        Cliente cliente = clienteService.clienteAutenticado(autorizacion);
         exigirClienteParaBloqueo(cliente);
 
         Cuenta cuenta = cuentaRepository.findByIdCuentaAndIdCliente(request.idCuenta(), cliente.getIdCliente())
@@ -150,18 +150,14 @@ public class CuentaService {
         return respuestaBloqueo(cuentaRepository.saveAndFlush(cuenta), MENSAJE_BLOQUEO);
     }
 
-    @Transactional(readOnly = true, noRollbackFor = {
-            ClienteNoRegistradoException.class,
-            ContrasenaIncorrectaException.class,
-            CuentaNoEncontradaException.class
-    })
     public EstadoCuentaResponse consultarEstado(ConsultarEstadoRequest request) {
         Cliente cliente = clienteRepository.findByUsuario(request.usuario()).orElse(null);
         if (cliente == null) {
             passwordEncoder.matches(request.contrasena(), hashFicticio);
             throw new ClienteNoRegistradoException(MENSAJE_CLIENTE_NO_EXISTE);
         }
-        if (!contrasenaCoincide(cliente, request.contrasena())) {
+        if (!clienteService.contrasenaValida(cliente, request.contrasena())) {
+            clienteService.anotarIntentoFallido(cliente);
             throw new ContrasenaIncorrectaException(MENSAJE_CONTRASENA);
         }
 
@@ -242,14 +238,6 @@ public class CuentaService {
         } catch (RuntimeException ex) {
             throw new ConsultaSaldoNoDisponibleException(MENSAJE_MAS_TARDE);
         }
-    }
-
-    private boolean contrasenaCoincide(Cliente cliente, String plana) {
-        String almacenada = cliente.getContrasena();
-        if (almacenada != null && (almacenada.startsWith("$2a$") || almacenada.startsWith("$2b$") || almacenada.startsWith("$2y$"))) {
-            return passwordEncoder.matches(plana, almacenada);
-        }
-        return plana.equals(almacenada);
     }
 
     private String normalizarMotivo(String motivo) {

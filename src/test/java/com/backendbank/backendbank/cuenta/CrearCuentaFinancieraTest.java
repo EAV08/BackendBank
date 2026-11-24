@@ -3,6 +3,7 @@ package com.backendbank.backendbank.cuenta;
 import com.backendbank.backendbank.cliente.Cliente;
 import com.backendbank.backendbank.cliente.ClienteRepository;
 import com.backendbank.backendbank.cliente.ClienteService;
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,9 @@ class CrearCuentaFinancieraTest {
 
     @Autowired
     private CuentaRepository cuentaRepository;
+
+    @Autowired
+    private TokenService tokenService;
 
     @Test
     void creaLaCuentaActivaConNumeroUnicoYSaldoCero() throws Exception {
@@ -156,24 +160,32 @@ class CrearCuentaFinancieraTest {
     }
 
     @Test
-    void rechazaCuandoFaltaElIdCliente() throws Exception {
+    void rechazaCuandoNoHaySesionAunqueLlegueElIdDelCliente() throws Exception {
+        UUID clienteId = registrar("Tienda El Sol", "900123456", "contacto@elsol.com");
+
         mockMvc.perform(post("/cuentas")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.mensaje").value("Debe completar los siguientes datos: id cliente"));
+                        .content("""
+                                {
+                                  "idCliente": "%s"
+                                }
+                                """.formatted(clienteId)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("debe ingresar de nuevo"));
 
         assertEquals(0, cuentaRepository.count());
     }
 
     private org.springframework.test.web.servlet.ResultActions solicitar(UUID idCliente) throws Exception {
         return mockMvc.perform(post("/cuentas")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {
-                          "idCliente": "%s"
-                        }
-                        """.formatted(idCliente)));
+                .header("Authorization", autorizacion(idCliente)));
+    }
+
+    private String autorizacion(UUID idCliente) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElse(null);
+        String usuario = cliente == null ? "desconocido" : cliente.getUsuario();
+        String rol = cliente == null ? Cliente.ROL_CLIENTE : cliente.getRol();
+        return "Bearer " + tokenService.generar(idCliente, usuario, rol);
     }
 
     private UUID registrar(String nombre, String nit, String email) throws Exception {

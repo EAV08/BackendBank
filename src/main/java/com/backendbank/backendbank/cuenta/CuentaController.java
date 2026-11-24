@@ -1,6 +1,7 @@
 package com.backendbank.backendbank.cuenta;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,36 +24,63 @@ import java.util.UUID;
 public class CuentaController {
 
     private final CuentaService cuentaService;
+    private final DepositoService depositoService;
+    private final RetiroService retiroService;
 
-    public CuentaController(CuentaService cuentaService) {
+    public CuentaController(
+            CuentaService cuentaService,
+            DepositoService depositoService,
+            RetiroService retiroService) {
         this.cuentaService = cuentaService;
+        this.depositoService = depositoService;
+        this.retiroService = retiroService;
     }
 
     @PostMapping
-    public ResponseEntity<CuentaCreadaResponse> crear(@Valid @RequestBody CrearCuentaRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(cuentaService.crear(request));
+    public ResponseEntity<CuentaCreadaResponse> crear(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(cuentaService.crear(autorizacion));
     }
 
     @PostMapping("/saldo")
-    public ResponseEntity<SaldoDisponibleResponse> consultar(@Valid @RequestBody ConsultarSaldoRequest request) {
-        return ResponseEntity.ok(cuentaService.consultar(request));
+    public ResponseEntity<SaldoDisponibleResponse> consultar(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody ConsultarSaldoRequest request) {
+        return ResponseEntity.ok(cuentaService.consultar(request, autorizacion));
     }
 
     @PostMapping("/bloqueo")
-    public ResponseEntity<CuentaBloqueadaResponse> bloquear(@Valid @RequestBody BloquearCuentaRequest request) {
-        return ResponseEntity.ok(cuentaService.bloquear(request));
+    public ResponseEntity<CuentaBloqueadaResponse> bloquear(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody BloquearCuentaRequest request) {
+        return ResponseEntity.ok(cuentaService.bloquear(request, autorizacion));
     }
 
     @PostMapping("/estado")
     public ResponseEntity<EstadoCuentaResponse> consultarEstado(@Valid @RequestBody ConsultarEstadoRequest request) {
         return ResponseEntity.ok(cuentaService.consultarEstado(request));
     }
-}
 
-record CrearCuentaRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente
-) {
+    @PostMapping("/deposito")
+    public ResponseEntity<ConfirmacionDepositoResponse> prepararDeposito(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody DepositoRequest request) {
+        return ResponseEntity.ok(depositoService.preparar(request, autorizacion));
+    }
+
+    @PostMapping("/deposito/confirmacion")
+    public ResponseEntity<DepositoRealizadoResponse> confirmarDeposito(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody DepositoRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(depositoService.confirmar(request, autorizacion));
+    }
+
+    @PostMapping("/retiro")
+    public ResponseEntity<RetiroRealizadoResponse> retirar(
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
+            @Valid @RequestBody RetiroRequest request) {
+        return ResponseEntity.ok(retiroService.retirar(request, autorizacion));
+    }
 }
 
 record CuentaCreadaResponse(
@@ -65,9 +94,6 @@ record CuentaCreadaResponse(
 }
 
 record ConsultarSaldoRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente,
-
         @NotNull(message = "El id cuenta debe completarse")
         UUID idCuenta
 ) {
@@ -84,9 +110,6 @@ record SaldoDisponibleResponse(
 }
 
 record BloquearCuentaRequest(
-        @NotNull(message = "El id cliente debe completarse")
-        UUID idCliente,
-
         @NotNull(message = "El id cuenta debe completarse")
         UUID idCuenta,
 
@@ -138,6 +161,60 @@ record ConsultarEstadoRequest(
 record EstadoCuentaResponse(String numeroCuenta, String estado, String mensaje) {
 }
 
+record DepositoRequest(
+        @NotBlank(message = "El número de cuenta debe completarse")
+        @Size(max = 20, message = "El número de cuenta debe corregirse")
+        String numeroCuenta,
+
+        @NotNull(message = "El monto debe completarse")
+        @Digits(integer = 12, fraction = 2, message = "El monto debe corregirse")
+        BigDecimal monto
+) {
+    DepositoRequest {
+        numeroCuenta = numeroCuenta == null ? null : numeroCuenta.trim();
+    }
+}
+
+record ConfirmacionDepositoResponse(
+        String numeroCuenta,
+        String nombrePropietario,
+        BigDecimal monto,
+        String mensaje
+) {
+}
+
+record DepositoRealizadoResponse(
+        UUID idTransaccion,
+        String numeroCuenta,
+        String nombrePropietario,
+        BigDecimal monto,
+        BigDecimal saldo,
+        String mensaje
+) {
+}
+
+record RetiroRequest(
+        @NotBlank(message = "El número de cuenta debe completarse")
+        @Size(max = 20, message = "El número de cuenta debe corregirse")
+        String numeroCuenta,
+
+        @NotNull(message = "El monto debe completarse")
+        BigDecimal monto
+) {
+    RetiroRequest {
+        numeroCuenta = numeroCuenta == null ? null : numeroCuenta.trim();
+    }
+}
+
+record RetiroRealizadoResponse(
+        UUID idRetiro,
+        String numeroCuenta,
+        BigDecimal monto,
+        BigDecimal saldo,
+        String mensaje
+) {
+}
+
 record MensajeError(String mensaje) {
 }
 
@@ -182,5 +259,30 @@ class CuentaExceptionHandler {
     @ExceptionHandler(ContrasenaIncorrectaException.class)
     ResponseEntity<MensajeError> contrasenaIncorrecta(ContrasenaIncorrectaException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MontoDepositoInvalidoException.class)
+    ResponseEntity<MensajeError> montoDepositoInvalido(MontoDepositoInvalidoException ex) {
+        return ResponseEntity.badRequest().body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(CuentaDepositoNoEncontradaException.class)
+    ResponseEntity<MensajeError> cuentaDepositoNoEncontrada(CuentaDepositoNoEncontradaException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(DepositoRechazadoException.class)
+    ResponseEntity<MensajeError> depositoRechazado(DepositoRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MontoRetiroInvalidoException.class)
+    ResponseEntity<MensajeError> montoRetiroInvalido(MontoRetiroInvalidoException ex) {
+        return ResponseEntity.badRequest().body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(RetiroRechazadoException.class)
+    ResponseEntity<MensajeError> retiroRechazado(RetiroRechazadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new MensajeError(ex.getMessage()));
     }
 }

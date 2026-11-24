@@ -89,8 +89,9 @@ public class ClienteService {
     }
 
     @Transactional
-    public ActualizarClienteResponse actualizar(UUID idCliente, ActualizarClienteRequest request) {
-        Cliente actor = exigirAdministrador(request.actualizadoPor());
+    public ActualizarClienteResponse actualizar(
+            UUID idCliente, ActualizarClienteRequest request, String autorizacion) {
+        Cliente actor = exigirAdministrador(autorizacion);
         Cliente cliente = clienteRepository.findById(idCliente)
                 .orElseThrow(() -> new ClienteNoEncontradoException(MENSAJE_NO_ENCONTRADO));
 
@@ -122,8 +123,9 @@ public class ClienteService {
     }
 
     @Transactional
-    public CambiarEstadoResponse cambiarEstado(UUID idCliente, CambiarEstadoRequest request) {
-        Cliente actor = exigirAdministrador(request.actualizadoPor());
+    public CambiarEstadoResponse cambiarEstado(
+            UUID idCliente, CambiarEstadoRequest request, String autorizacion) {
+        Cliente actor = exigirAdministrador(autorizacion);
         Cliente cliente = clienteRepository.findById(idCliente)
                 .orElseThrow(() -> new ClienteNoEncontradoException(MENSAJE_NO_ENCONTRADO));
 
@@ -171,9 +173,7 @@ public class ClienteService {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
         if (!contrasenaCoincide(cliente, request.contrasena())) {
-            if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
-                registrarIntentoFallido(cliente);
-            }
+            anotarIntentoFallido(cliente);
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES);
         }
         if (Cliente.ESTADO_BLOQUEADO.equals(cliente.getEstado())) {
@@ -213,6 +213,31 @@ public class ClienteService {
         return true;
     }
 
+    @Transactional(noRollbackFor = IngresoRechazadoException.class)
+    public void anotarIntentoFallido(Cliente cliente) {
+        if (Cliente.ESTADO_ACTIVO.equals(cliente.getEstado())) {
+            registrarIntentoFallido(cliente);
+        }
+    }
+
+    public boolean contrasenaValida(Cliente cliente, String plana) {
+        return contrasenaCoincide(cliente, plana);
+    }
+
+    public Cliente clienteAutenticado(String autorizacion) {
+        UUID idCliente = leerSesion(autorizacion).idCliente();
+        return clienteRepository.findById(idCliente)
+                .orElseThrow(() -> new ClienteNoEncontradoException(MENSAJE_NO_ENCONTRADO));
+    }
+
+    public Cliente clienteIdentificado(String autorizacion) {
+        try {
+            return clienteAutenticado(autorizacion);
+        } catch (SesionNoVigenteException ex) {
+            throw new IdentificacionRequeridaException("debe identificarse para continuar");
+        }
+    }
+
     private void registrarIntentoFallido(Cliente cliente) {
         int intentos = cliente.getIntentosFallidos() + 1;
         cliente.setIntentosFallidos(intentos);
@@ -243,11 +268,8 @@ public class ClienteService {
         clienteRepository.saveAndFlush(cliente);
     }
 
-    private Cliente exigirAdministrador(UUID actualizadoPor) {
-        if (actualizadoPor == null) {
-            throw new SesionNoVigenteException(MENSAJE_SESION);
-        }
-        Cliente actor = clienteRepository.findById(actualizadoPor).orElse(null);
+    private Cliente exigirAdministrador(String autorizacion) {
+        Cliente actor = clienteRepository.findById(leerSesion(autorizacion).idCliente()).orElse(null);
         if (actor == null || !Cliente.ESTADO_ACTIVO.equals(actor.getEstado())) {
             throw new SesionNoVigenteException(MENSAJE_SESION);
         }
@@ -255,6 +277,24 @@ public class ClienteService {
             throw new AccesoDenegadoException(MENSAJE_NO_AUTORIZADO);
         }
         return actor;
+    }
+
+    private TokenService.SesionToken leerSesion(String autorizacion) {
+        if (autorizacion == null || autorizacion.isBlank()) {
+            throw new SesionNoVigenteException(MENSAJE_SESION);
+        }
+        String valor = autorizacion.trim();
+        if (valor.length() >= 7 && valor.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            valor = valor.substring(7).trim();
+        }
+        if (valor.isEmpty()) {
+            throw new SesionNoVigenteException(MENSAJE_SESION);
+        }
+        try {
+            return tokenService.validar(valor);
+        } catch (TokenService.TokenInvalidoException ex) {
+            throw new SesionNoVigenteException(MENSAJE_SESION);
+        }
     }
 
     private ClienteDuplicadoException duplicadoDesdeRestriccion(DataIntegrityViolationException ex) {
@@ -322,6 +362,13 @@ class IngresoRechazadoException extends RuntimeException {
 class BloqueoTemporalException extends RuntimeException {
 
     BloqueoTemporalException(String mensaje) {
+        super(mensaje);
+    }
+}
+
+class IdentificacionRequeridaException extends RuntimeException {
+
+    IdentificacionRequeridaException(String mensaje) {
         super(mensaje);
     }
 }

@@ -1,5 +1,6 @@
 package com.backendbank.backendbank.cuenta;
 
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class ConsultarSaldoNoDisponibleTest {
     @Autowired
     private CuentaRepository cuentaRepository;
 
+    @Autowired
+    private TokenService tokenService;
+
     @MockitoBean
     private ConsultaSaldo consultaSaldo;
 
@@ -46,13 +50,13 @@ class ConsultarSaldoNoDisponibleTest {
         cuenta = cuentaRepository.saveAndFlush(cuenta);
 
         mockMvc.perform(post("/cuentas/saldo")
+                        .header("Authorization", "Bearer " + tokenService.generar(clienteId, "saldo", "CLIENTE"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "idCliente": "%s",
                                   "idCuenta": "%s"
                                 }
-                                """.formatted(clienteId, cuenta.getIdCuenta())))
+                                """.formatted(cuenta.getIdCuenta())))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_MAS_TARDE))
                 .andExpect(jsonPath("$.saldo").doesNotExist());

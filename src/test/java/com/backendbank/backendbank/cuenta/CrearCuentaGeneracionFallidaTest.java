@@ -1,5 +1,6 @@
 package com.backendbank.backendbank.cuenta;
 
+import com.backendbank.backendbank.seguridad.TokenService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ class CrearCuentaGeneracionFallidaTest {
     @Autowired
     private CuentaRepository cuentaRepository;
 
+    @Autowired
+    private TokenService tokenService;
+
     @MockitoBean
     private GeneradorNumeroCuenta generadorNumeroCuenta;
 
@@ -38,12 +42,7 @@ class CrearCuentaGeneracionFallidaTest {
         long antes = cuentaRepository.count();
 
         mockMvc.perform(post("/cuentas")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "idCliente": "%s"
-                                }
-                                """.formatted(clienteId)))
+                        .header("Authorization", "Bearer " + tokenService.generar(clienteId, "motor", "CLIENTE")))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.mensaje").value(CuentaService.MENSAJE_TECNICO));
 

@@ -334,6 +334,7 @@ class RegistroClienteTest {
         Cliente antes = clienteRepository.findById(clienteId).orElseThrow();
 
         mockMvc.perform(put("/clientes/" + clienteId)
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Tienda El Sol Actualizada",
@@ -369,6 +370,7 @@ class RegistroClienteTest {
         long antes = clienteRepository.count();
 
         mockMvc.perform(put("/clientes/" + UUID.randomUUID())
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Tienda Nueva",
@@ -389,6 +391,7 @@ class RegistroClienteTest {
         long antes = clienteRepository.count();
 
         mockMvc.perform(put("/clientes/" + UUID.randomUUID())
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Tienda El Sol Actualizada",
@@ -449,6 +452,7 @@ class RegistroClienteTest {
         fijarEstado(otroClienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(put("/clientes/" + clienteId)
+                        .header("Authorization", bearer(otroClienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Nombre Cambiado",
@@ -499,6 +503,7 @@ class RegistroClienteTest {
         UUID clienteId = registrar("Tienda El Sol", "El Sol S.A.S.", "900123456", "contacto@elsol.com", "3001234567");
 
         mockMvc.perform(put("/clientes/" + clienteId)
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Nombre Cambiado",
@@ -519,6 +524,7 @@ class RegistroClienteTest {
         registrar("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", null);
 
         mockMvc.perform(put("/clientes/" + clienteId)
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(actualizacionJson(
                                 "Tienda El Sol",
@@ -540,6 +546,7 @@ class RegistroClienteTest {
         Cliente antes = clienteRepository.findById(clienteId).orElseThrow();
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "El cliente solicitó el cierre", adminId)))
                 .andExpect(status().isOk())
@@ -567,6 +574,7 @@ class RegistroClienteTest {
         String nit = cliente.getNitDocumento();
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Reactivación autorizada", adminId)))
                 .andExpect(status().isOk())
@@ -589,6 +597,7 @@ class RegistroClienteTest {
         fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Validación completada", adminId)))
                 .andExpect(status().isOk())
@@ -610,6 +619,7 @@ class RegistroClienteTest {
         long antes = clienteRepository.count();
 
         mockMvc.perform(patch("/clientes/" + UUID.randomUUID() + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "Cierre", adminId)))
                 .andExpect(status().isNotFound())
@@ -625,6 +635,7 @@ class RegistroClienteTest {
         fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Sin cambios", adminId)))
                 .andExpect(status().isConflict())
@@ -644,6 +655,7 @@ class RegistroClienteTest {
         fijarEstado(otroClienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(otroClienteId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "Cierre", otroClienteId)))
                 .andExpect(status().isForbidden())
@@ -675,6 +687,7 @@ class RegistroClienteTest {
         fijarEstado(clienteId, Cliente.ESTADO_ACTIVO);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "El cliente solicito el cierre", adminId)))
                 .andExpect(status().isUnauthorized())
@@ -692,6 +705,7 @@ class RegistroClienteTest {
         fijarEstado(pendienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(patch("/clientes/" + pendienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("inactivo", "Cierre", adminId)))
                 .andExpect(status().isConflict())
@@ -702,6 +716,7 @@ class RegistroClienteTest {
         UUID bloqueadoId = registrar("Otra Tienda", "Otra S.A.S.", "800999111", "otro@elsol.com", null);
         fijarEstado(bloqueadoId, Cliente.ESTADO_BLOQUEADO);
         mockMvc.perform(patch("/clientes/" + bloqueadoId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Reactivar", adminId)))
                 .andExpect(status().isConflict())
@@ -928,6 +943,7 @@ class RegistroClienteTest {
                 .andExpect(jsonPath("$.mensaje").value("su usuario está inactivo y debe contactar al banco"));
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Reactivación autorizada", adminId)))
                 .andExpect(status().isOk())
@@ -1002,7 +1018,9 @@ class RegistroClienteTest {
                         "Su cuenta está bloqueada temporalmente. Inténtelo nuevamente en 15 minutos o contacte al banco."))
                 .andExpect(jsonPath("$.token").doesNotExist());
 
-        Thread.sleep(15 * 60 * 1000L);
+        Cliente bloqueado = clienteRepository.findById(clienteId).orElseThrow();
+        bloqueado.setBloqueadoHasta(OffsetDateTime.now().minusSeconds(1));
+        clienteRepository.saveAndFlush(bloqueado);
 
         mockMvc.perform(post("/clientes/ingreso")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1023,6 +1041,7 @@ class RegistroClienteTest {
         fijarEstado(clienteId, Cliente.ESTADO_PENDIENTE_DE_VALIDACION);
 
         mockMvc.perform(patch("/clientes/" + clienteId + "/estado")
+                        .header("Authorization", bearer(adminId))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(estadoJson("activo", "Validación completada", adminId)));
 
@@ -1088,6 +1107,11 @@ class RegistroClienteTest {
         clienteRepository.saveAndFlush(cliente);
     }
 
+    private String bearer(UUID idCliente) {
+        Cliente cliente = clienteRepository.findById(idCliente).orElseThrow();
+        return "Bearer " + tokenService.generar(cliente.getIdCliente(), cliente.getUsuario(), cliente.getRol());
+    }
+
     private String ingresoJson(String usuario, String contrasena) {
         return """
                 {
@@ -1098,13 +1122,12 @@ class RegistroClienteTest {
     }
 
     private String estadoJson(String estado, String motivo, UUID actualizadoPor) {
-        String actorJson = actualizadoPor == null ? "" : ",\n  \"actualizadoPor\": \"" + actualizadoPor + "\"";
         return """
                 {
                   "estado": "%s",
-                  "motivo": "%s"%s
+                  "motivo": "%s"
                 }
-                """.formatted(estado, motivo, actorJson);
+                """.formatted(estado, motivo);
     }
 
     private String actualizacionJson(
@@ -1114,14 +1137,13 @@ class RegistroClienteTest {
             String telefono,
             UUID actualizadoPor) {
         String telefonoJson = telefono == null ? "" : ",\n  \"telefono\": \"" + telefono + "\"";
-        String actorJson = actualizadoPor == null ? "" : ",\n  \"actualizadoPor\": \"" + actualizadoPor + "\"";
         return """
                 {
                   "nombreComercial": "%s",
                   "razonSocial": "%s",
-                  "email": "%s"%s%s
+                  "email": "%s"%s
                 }
-                """.formatted(nombreComercial, razonSocial, email, telefonoJson, actorJson);
+                """.formatted(nombreComercial, razonSocial, email, telefonoJson);
     }
 
     private UUID idDe(MvcResult resultado) throws Exception {

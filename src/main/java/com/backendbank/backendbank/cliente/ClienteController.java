@@ -3,7 +3,6 @@ package com.backendbank.backendbank.cliente;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -17,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -54,15 +54,17 @@ public class ClienteController {
     @PutMapping("/{idCliente}")
     public ResponseEntity<ActualizarClienteResponse> actualizar(
             @PathVariable UUID idCliente,
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
             @Valid @RequestBody ActualizarClienteRequest request) {
-        return ResponseEntity.ok(clienteService.actualizar(idCliente, request));
+        return ResponseEntity.ok(clienteService.actualizar(idCliente, request, autorizacion));
     }
 
     @PatchMapping("/{idCliente}/estado")
     public ResponseEntity<CambiarEstadoResponse> cambiarEstado(
             @PathVariable UUID idCliente,
+            @RequestHeader(name = "Authorization", required = false) String autorizacion,
             @Valid @RequestBody CambiarEstadoRequest request) {
-        return ResponseEntity.ok(clienteService.cambiarEstado(idCliente, request));
+        return ResponseEntity.ok(clienteService.cambiarEstado(idCliente, request, autorizacion));
     }
 }
 
@@ -150,10 +152,7 @@ record ActualizarClienteRequest(
         String email,
 
         @Size(max = 20, message = "El teléfono debe corregirse")
-        String telefono,
-
-        @NotNull
-        UUID actualizadoPor
+        String telefono
 ) {
     ActualizarClienteRequest {
         nombreComercial = recortar(nombreComercial);
@@ -185,10 +184,7 @@ record CambiarEstadoRequest(
 
         @NotBlank(message = "El motivo debe completarse")
         @Size(max = 200, message = "El motivo debe corregirse")
-        String motivo,
-
-        @NotNull
-        UUID actualizadoPor
+        String motivo
 ) {
     CambiarEstadoRequest {
         estado = recortar(estado);
@@ -227,14 +223,14 @@ class ApiExceptionHandler {
             Map.entry("motivo", "motivo"),
             Map.entry("idCliente", "id cliente"),
             Map.entry("idCuenta", "id cuenta"),
-            Map.entry("numeroCuenta", "número de cuenta")
+            Map.entry("numeroCuenta", "número de cuenta"),
+            Map.entry("monto", "monto")
     );
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<?> datosInvalidos(MethodArgumentNotValidException ex) {
         List<String> orden = ordenDeCampos(ex.getBindingResult().getTarget());
         List<FieldError> datos = ex.getBindingResult().getFieldErrors().stream()
-                .filter(error -> !"actualizadoPor".equals(error.getField()))
                 .sorted(Comparator.comparingInt(error -> indiceDe(orden, error.getField())))
                 .toList();
         if (datos.isEmpty()) {
@@ -281,6 +277,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(SesionNoVigenteException.class)
     ResponseEntity<MensajeError> sesionNoVigente(SesionNoVigenteException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IdentificacionRequeridaException.class)
+    ResponseEntity<MensajeError> identificacionRequerida(IdentificacionRequeridaException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new MensajeError(ex.getMessage()));
     }
 
