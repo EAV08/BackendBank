@@ -17,6 +17,7 @@ public class EventoTransaccion {
 
     public static final String DEPOSITO = "deposito";
     public static final String RETIRO = "retiro";
+    public static final String TRANSFERENCIA = "transferencia";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
